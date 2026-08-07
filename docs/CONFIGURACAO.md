@@ -137,7 +137,15 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
    EVOLUTION_API_KEY=...
    EVOLUTION_INSTANCE=...
    WHATSAPP_DESTINO=...
+   TZ=America/Sao_Paulo
    ```
+
+   As seis primeiras são as mesmas da seção 2 (a lista canônica de nomes está em
+   [`.env.example`](../.env.example)). `TZ` não é segredo: a VM da nuvem roda em
+   UTC e os scripts usam a data local (`date.today()`), então sem ela uma
+   execução agendada para depois das 21h de Brasília buscaria o diário do dia
+   seguinte. Às 8h da manhã a data coincide, mas a variável evita a pegadinha
+   caso o horário do trigger mude.
 
 3. **Rede**: o ambiente de nuvem passa por um proxy que bloqueia domínios fora da
    lista padrão. Em **Network access → Custom → Allowed domains**, adicione:
@@ -152,7 +160,38 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
 > (ex.: instância Evolution exclusiva; o cadastro INLABS é gratuito — crie um só
 > para a automação).
 
-### 4.4 Prompt da rotina
+### 4.4 Script de configuração do ambiente (setup script)
+
+A VM da nuvem já vem com Python 3 e pip, mas **não** com as bibliotecas dos
+scripts. No formulário do ambiente de nuvem, em **Setup script** (App Desktop:
+"Script de configuração"), coloque:
+
+```bash
+python3 -m pip install --break-system-packages -r requirements.txt \
+  || python3 -m pip install -r requirements.txt
+```
+
+São só duas dependências, declaradas em [`requirements.txt`](../requirements.txt):
+`requests` (as três chamadas HTTP: INLABS, DODF, Evolution) e `pypdf` (leitura do
+DODF quando a edição vem em PDF). Todo o resto dos scripts é biblioteca padrão do
+Python. O `||` é uma salvaguarda: em imagens Debian recentes o pip global recusa
+instalar sem `--break-system-packages`, e em imagens mais antigas essa flag não
+existe — a linha funciona nos dois casos.
+
+Dois detalhes de comportamento:
+
+- O setup script roda na **criação/atualização do snapshot** do ambiente, não a
+  cada execução. As dependências ficam embutidas na imagem — a rotina começa
+  rápida e determinística. Se `requirements.txt` mudar, atualize o ambiente para
+  o snapshot pegar a versão nova.
+- Durante o setup o PyPI já está liberado por padrão. A allowlist customizada da
+  seção 4.3 vale para o **runtime** da rotina, não para a instalação.
+
+Sem esse script, o passo 1 do `SKILL.md` falha no primeiro
+`python scripts/coleta_inlabs.py` (`ModuleNotFoundError: requests`) e a rotina
+passa a depender de o agente improvisar a instalação a cada execução.
+
+### 4.5 Prompt da rotina
 
 O Routines recebe um prompt a cada execução. Como o `CLAUDE.md` do repositório é
 lido automaticamente e já aponta para o `SKILL.md`, o prompt pode ser curto, mas
@@ -165,7 +204,7 @@ scripts/enviar_whatsapp.py) e faça commit+push apenas de data/vistos.json.
 Se alguma fonte falhar, siga com a outra e relate a falha na mensagem.
 ```
 
-### 4.5 Limites úteis de saber
+### 4.6 Limites úteis de saber
 
 - Intervalo mínimo entre execuções: **1 hora** (irrelevante para rotina diária).
 - A execução pode começar alguns minutos após o horário agendado (é normal).
