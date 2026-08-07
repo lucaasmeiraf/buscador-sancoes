@@ -1,0 +1,3 @@
+# Dependências dos scripts de coleta/envio
+requests
+pypdf
