@@ -1,0 +1,12 @@
+# Segredos — nunca commitar
+.env
+
+# Artefatos de execução (só data/vistos.json é versionado — é o estado de dedup)
+data/raw/
+data/candidatos.json
+data/resumo.txt
+
+# Python
+__pycache__/
+*.pyc
+.venv/
