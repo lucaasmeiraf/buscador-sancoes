@@ -1,10 +1,15 @@
 # Segredos — nunca commitar
 .env
 
-# Artefatos de execução (só data/vistos.json é versionado — é o estado de dedup)
+# Artefatos de execução. Versionados: data/vistos.json (estado de dedup) e
+# data/leads.csv (planilha-mestre — é o histórico, tem de sobreviver ao clone).
 data/raw/
 data/candidatos.json
+data/leads_hoje.json
 data/resumo.txt
+
+# Documento de escopo (briefing de trabalho, mantido fora do repositório)
+buscador_sancoes.docx
 
 # Python
 __pycache__/

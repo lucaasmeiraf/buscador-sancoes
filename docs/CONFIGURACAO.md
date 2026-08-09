@@ -76,9 +76,17 @@ python scripts/prefiltro.py         # seleciona trechos -> data/candidatos.json
 python scripts/enviar_whatsapp.py --texto "teste do buscador de sanções"
 ```
 
-Na primeira execução real, confira os pontos marcados `TODO(1ª execução)` em
-`scripts/coleta_inlabs.py` e `scripts/coleta_dodf.py` — são os endpoints exatos
-dos sites, que podem ter mudado.
+O `prefiltro` informa quantos candidatos saíram **com link direto da matéria**.
+Se esse número vier zerado num dia com candidatos do DOU, o índice do
+`www.in.gov.br` não foi baixado (rede bloqueada ou layout do site mudou) — os
+links caem para a página impressa, que continua correta. Diagnóstico isolado:
+
+```bash
+python scripts/links_dou.py 2026-08-07 do3   # deve imprimir milhares de chaves
+```
+
+Os endpoints do INLABS e do DODF foram conferidos em 09/08/2026; se um deles
+mudar, os erros aparecem já no passo 3.
 
 A extração em si (LLM) não roda localmente por script: é o agente Claude que,
 seguindo `SKILL.md` e `prompts/rotina_sancoes.md`, processa `data/candidatos.json`.
@@ -149,8 +157,11 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
 
 3. **Rede**: o ambiente de nuvem passa por um proxy que bloqueia domínios fora da
    lista padrão. Em **Network access → Custom → Allowed domains**, adicione:
-   - `inlabs.in.gov.br` (e `www.in.gov.br`, para os links das publicações)
-   - `dodf.df.gov.br`
+   - `inlabs.in.gov.br` — download do DOU
+   - `www.in.gov.br` — **obrigatório**, não opcional: é de lá que
+     `scripts/links_dou.py` tira o link exato de cada matéria. Sem esse domínio a
+     rotina ainda funciona, mas cai para o link de página (menos preciso).
+   - `dodf.df.gov.br` — download do DODF (ver `docs/ISSUES.md` §1 se falhar)
    - o domínio do seu servidor Evolution API
 
 > ⚠️ **Sobre segredos**: hoje o Claude Code em nuvem **não tem cofre de segredos**
@@ -167,23 +178,30 @@ scripts. No formulário do ambiente de nuvem, em **Setup script** (App Desktop:
 "Script de configuração"), coloque:
 
 ```bash
-python3 -m pip install --break-system-packages -r requirements.txt \
-  || python3 -m pip install -r requirements.txt
+python3 -m pip install --break-system-packages requests pypdf || python3 -m pip install requests pypdf
 ```
 
-São só duas dependências, declaradas em [`requirements.txt`](../requirements.txt):
-`requests` (as três chamadas HTTP: INLABS, DODF, Evolution) e `pypdf` (leitura do
-DODF quando a edição vem em PDF). Todo o resto dos scripts é biblioteca padrão do
-Python. O `||` é uma salvaguarda: em imagens Debian recentes o pip global recusa
-instalar sem `--break-system-packages`, e em imagens mais antigas essa flag não
-existe — a linha funciona nos dois casos.
+O comando é uma linha só, de propósito: a versão com quebra de linha usava `\`
+(continuação de linha do bash), que não funciona se o comando for testado no
+PowerShell do Windows — o `\` vira argumento literal e o pip falha com
+"Directory '\\' is not installable".
+
+São só duas dependências (a lista canônica está em
+[`requirements.txt`](../requirements.txt)): `requests` (as três chamadas HTTP:
+INLABS, DODF, Evolution) e `pypdf` (leitura do DODF quando a edição vem em PDF).
+Todo o resto dos scripts é biblioteca padrão do Python. Os pacotes são nomeados
+direto no comando — e não via `-r requirements.txt` — porque o setup script roda
+num diretório de trabalho que não é a raiz do repositório, e o caminho relativo
+falha com "No such file or directory". O `||` é uma salvaguarda: em imagens
+Debian recentes o pip global recusa instalar sem `--break-system-packages`, e em
+imagens mais antigas essa flag não existe — a linha funciona nos dois casos.
 
 Dois detalhes de comportamento:
 
 - O setup script roda na **criação/atualização do snapshot** do ambiente, não a
   cada execução. As dependências ficam embutidas na imagem — a rotina começa
-  rápida e determinística. Se `requirements.txt` mudar, atualize o ambiente para
-  o snapshot pegar a versão nova.
+  rápida e determinística. Se `requirements.txt` mudar, atualize também a lista
+  de pacotes no setup script e re-crie o snapshot do ambiente.
 - Durante o setup o PyPI já está liberado por padrão. A allowlist customizada da
   seção 4.3 vale para o **runtime** da rotina, não para a instalação.
 
@@ -199,9 +217,12 @@ seja explícito por garantia:
 
 ```
 Execute a rotina diária do Buscador de Sanções seguindo exatamente o passo a
-passo de SKILL.md, na ordem. Ao final, envie o resumo por WhatsApp (script
-scripts/enviar_whatsapp.py) e faça commit+push apenas de data/vistos.json.
-Se alguma fonte falhar, siga com a outra e relate a falha na mensagem.
+passo de SKILL.md, na ordem. Só vira lead penalidade com MULTA acima de
+R$ 200 mil (ou sem valor expresso) em contrato de infraestrutura rodoviária.
+Copie link, edição e página dos candidatos sem alterar — nunca monte URL.
+Ao final, envie o resumo por WhatsApp (scripts/enviar_whatsapp.py), atualize a
+planilha (scripts/planilha.py) e faça commit+push apenas de data/vistos.json e
+data/leads.csv. Se alguma fonte falhar, siga com a outra e relate na mensagem.
 ```
 
 ### 4.6 Limites úteis de saber

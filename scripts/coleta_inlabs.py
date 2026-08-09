@@ -8,13 +8,16 @@ Uso:
     python scripts/coleta_inlabs.py             # edições de hoje
     python scripts/coleta_inlabs.py 2026-08-05  # data específica (AAAA-MM-DD)
 
-Esqueleto: a estrutura está completa; conferir na primeira execução real se os
-endpoints/nomes de arquivo do INLABS continuam os mesmos (comentários TODO).
+Endpoints (verificados em 2026-08-09, com a edição de 07/08/2026):
+    GET  {BASE}/logar.php                            -> semeia cookies (obrigatório)
+    POST {BASE}/logar.php  email/password            -> inlabs_session_cookie
+    GET  {BASE}/index.php?p=AAAA-MM-DD&dl=AAAA-MM-DD-DOx.zip  -> zip de XMLs
 """
 
 import io
 import os
 import sys
+import time
 import zipfile
 from datetime import date
 from pathlib import Path
@@ -27,20 +30,58 @@ BASE_URL = "https://inlabs.in.gov.br"
 SECOES = ["DO1", "DO3"]
 DESTINO = Path(__file__).resolve().parent.parent / "data" / "raw" / "dou"
 
+# O INLABS fica atrás de um WAF que devolve 502 para POST "pelado". Ele exige
+# cara de navegador e os cookies de desafio (TS*) que só a página de login
+# entrega — daí o GET antes do POST e os headers abaixo.
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "pt-BR,pt;q=0.9",
+    "Origin": BASE_URL,
+    "Referer": f"{BASE_URL}/logar.php",
+}
+
+
+TENTATIVAS = 5
+
 
 def _sessao_logada() -> requests.Session:
-    """Abre sessão autenticada no INLABS (cookie de sessão)."""
+    """Abre sessão autenticada no INLABS (cookie `inlabs_session_cookie`).
+
+    O 502 do WAF é intermitente — a mesma requisição alterna entre sucesso e
+    falha em minutos. Por isso o retry com espera crescente: sem ele a rotina
+    perde o DOU do dia por uma instabilidade que passa sozinha.
+    """
     login = os.environ["INLABS_LOGIN"]
     senha = os.environ["INLABS_SENHA"]
 
-    s = requests.Session()
-    # TODO(1ª execução): confirmar endpoint e nomes dos campos do form de login.
-    # Padrão conhecido do INLABS: POST em /logar.php com email/password.
-    resp = s.post(f"{BASE_URL}/logar.php", data={"email": login, "password": senha}, timeout=60)
-    resp.raise_for_status()
-    if "inlabs_session" not in s.cookies and not s.cookies:
-        raise RuntimeError("Login INLABS não retornou cookie de sessão — conferir credenciais.")
-    return s
+    ultimo_erro = None
+    for tentativa in range(1, TENTATIVAS + 1):
+        s = requests.Session()
+        s.headers.update(HEADERS)
+        try:
+            s.get(f"{BASE_URL}/logar.php", timeout=60)  # semeia PHPSESSID + cookies do WAF
+            resp = s.post(f"{BASE_URL}/logar.php",
+                          data={"email": login, "password": senha}, timeout=90)
+            resp.raise_for_status()
+            if "inlabs_session_cookie" in s.cookies:
+                return s
+            # 200 sem cookie = credencial recusada; insistir não adianta.
+            raise RuntimeError(
+                "Login INLABS não retornou cookie de sessão — conferir "
+                "INLABS_LOGIN/INLABS_SENHA."
+            )
+        except requests.HTTPError as erro:
+            ultimo_erro = erro
+            espera = 10 * tentativa
+            print(f"[coleta_inlabs] login falhou ({erro.response.status_code}), "
+                  f"tentativa {tentativa}/{TENTATIVAS} — nova tentativa em {espera}s.")
+            time.sleep(espera)
+
+    raise RuntimeError(f"INLABS indisponível após {TENTATIVAS} tentativas: {ultimo_erro}")
 
 
 def baixar_dia(dia: date) -> list[Path]:
@@ -52,8 +93,7 @@ def baixar_dia(dia: date) -> list[Path]:
     extraidos: list[Path] = []
 
     for secao in SECOES:
-        # TODO(1ª execução): confirmar URL de download. Padrão conhecido:
-        #   {BASE}/index.php?p={AAAA-MM-DD}&dl={AAAA-MM-DD}-{SECAO}.zip
+        # Endpoint conferido em 09/08/2026 (edição de 07/08: DO1 e DO3 baixaram).
         nome_zip = f"{dia_str}-{secao}.zip"
         url = f"{BASE_URL}/index.php?p={dia_str}&dl={nome_zip}"
         print(f"[coleta_inlabs] baixando {nome_zip} ...")

@@ -9,6 +9,10 @@ IMPORTANTE: isto é seleção, não extração. O trecho selecionado vai INTEIRO
 LLM (prompts/rotina_sancoes.md), que é quem extrai os campos. Nenhum campo é
 extraído aqui por regex.
 
+Localização da publicação (link/página/edição) também NÃO é tarefa do LLM: é
+montada aqui, a partir dos metadados oficiais de cada fonte, e viaja com o
+trecho até a mensagem final. Ver `links_dou.py` e a nota sobre página no DODF.
+
 Saída: data/candidatos.json — lista de trechos com fonte, link e hash (dedup).
 Estado: data/vistos.json — hashes já processados em execuções anteriores.
 
@@ -25,6 +29,8 @@ import unicodedata
 from datetime import date
 from pathlib import Path
 from xml.etree import ElementTree
+
+import links_dou
 
 RAIZ = Path(__file__).resolve().parent.parent
 DICIONARIO = RAIZ / "config" / "dicionario.md"
@@ -70,40 +76,112 @@ def _casa(texto_norm: str, termos: list[str]) -> list[str]:
 
 # ---------------------------------------------------------------- fontes
 
-def blocos_dou(dia_str: str):
-    """Itera as matérias dos XML do DOU: uma matéria = um bloco candidato inteiro."""
+def _texto_materia(article: ElementTree.Element) -> tuple[str, str]:
+    """Devolve (texto para o LLM, texto do corpo para casar o link).
+
+    O campo <Texto> do INLABS vem como CDATA contendo HTML (`<p class="...">`).
+    Sem esta limpeza as tags iam literais para o LLM, gastando contexto e
+    poluindo a extração.
+
+    Os dois textos são diferentes de propósito: o primeiro acrescenta
+    <Identifica>/<Ementa> como cabeçalho, enquanto o índice do `leiturajornal`
+    guarda só o corpo — casar com o cabeçalho junto duplicaria o título e
+    derrubaria o casamento (o corpo já começa pelo título).
+    """
+    corpo = article.find("body")
+    if corpo is None:
+        texto = " ".join(article.itertext()).strip()
+        return texto, texto
+
+    html = corpo.findtext("Texto") or ""
+    html = re.sub(r"<\s*/?\s*(p|br|div|tr)\b[^>]*>", "\n", html, flags=re.I)
+    body_texto = re.sub(r"[ \t]+", " ", re.sub(r"<[^>]+>", " ", html)).strip()
+
+    cabecalho = [corpo.findtext(tag) or ""
+                 for tag in ("Identifica", "Ementa", "Titulo", "SubTitulo")]
+    partes = [p.strip() for p in [*cabecalho, body_texto] if p.strip()]
+    return "\n".join(partes), body_texto
+
+
+def blocos_dou(dia: date, dia_str: str):
+    """Itera as matérias dos XML do DOU: uma matéria = um bloco candidato inteiro.
+
+    Cada bloco leva a localização exata da publicação, extraída dos atributos do
+    <article>: `numberPage` é a página impressa (idêntica à `pagina` do
+    `pdfPage`) e `editionNumber` é o número da edição. O link preferencial é o
+    da matéria; o de página é o fallback (ver links_dou.py).
+    """
+    indices: dict[str, dict] = {}   # cache de índice por seção, dentro da run
     for xml in (DADOS / "raw" / "dou" / dia_str).rglob("*.xml"):
+        if xml.name.startswith("_"):
+            continue               # arquivos de apoio (cache de urlTitle)
         try:
             raiz = ElementTree.parse(xml).getroot()
         except ElementTree.ParseError:
             continue
         for artigo in raiz.iter("article"):
-            texto = " ".join(artigo.itertext()).strip()
+            texto, corpo = _texto_materia(artigo)
             if not texto:
                 continue
+            pub_name = artigo.get("pubName") or xml.parent.name
+            pagina = artigo.get("numberPage")
+            link, direto = links_dou.resolver(dia, pub_name, pagina, corpo, indices)
             yield {
                 "fonte": "DOU",
-                "secao": xml.parent.name,          # DO1 / DO3
+                "secao": pub_name,                 # DO1 / DO3 / DO1E...
                 "arquivo": xml.name,
-                # Link público aproximado; o XML pode trazer urlTitle nos atributos.
-                "link": artigo.get("pdfPage")
-                or f"https://www.in.gov.br/leiturajornal?data={dia_str}",
+                "pagina": pagina,
+                "edicao": artigo.get("editionNumber"),
+                "orgao_publicador": artigo.get("artCategory"),  # hierarquia oficial
+                "tipo_ato": artigo.get("artType"),
+                "link": link,
+                "link_tipo": "materia" if direto else "pagina",
+                "link_pagina": links_dou.link_pagina(dia, pub_name, pagina),
                 "texto": texto,
             }
 
 
+def _pagina_impressa(pagina_texto: str, indice: int) -> int:
+    """Página impressa do DODF: lê o rodapé "PÁGINA n", com o índice como reserva.
+
+    Conferido na edição 144 de 06/08/2026: o rodapé aparece em 83 das 84 páginas
+    (falta só na capa) e bate com o índice do PDF em todas. O rodapé é a fonte
+    de verdade porque as edições extras têm numeração própria.
+    """
+    achados = re.findall(r"P[ÁA]GINA\s+(\d+)", pagina_texto, flags=re.I)
+    return int(achados[-1]) if achados else indice
+
+
 def blocos_dodf(dia_str: str):
-    """Itera blocos do texto extraído do DODF (janela de páginas do PDF)."""
-    for txt in (DADOS / "raw" / "dodf" / dia_str).rglob("*.txt"):
+    """Itera blocos do texto extraído do DODF (uma página do PDF por bloco)."""
+    pasta = DADOS / "raw" / "dodf" / dia_str
+    meta = {}
+    if (pasta / "_edicao.json").exists():
+        meta = {m["arquivo"]: m for m in json.loads((pasta / "_edicao.json").read_text(encoding="utf-8"))}
+
+    for txt in pasta.rglob("*.txt"):
+        nome_pdf = txt.with_suffix(".pdf").name
+        info = meta.get(nome_pdf, {})
         paginas = txt.read_text(encoding="utf-8").split("\n\n===PAGINA===\n\n")
         for i, pagina in enumerate(paginas, start=1):
             if not pagina.strip():
                 continue
+            impressa = _pagina_impressa(pagina, i)
+            # `#page=` é entendido pelo visualizador de PDF do navegador — o
+            # endpoint devolve Content-Disposition: inline, então o link abre
+            # já na página certa em vez de baixar o diário inteiro.
+            link = info.get("url")
             yield {
                 "fonte": "DODF",
-                "secao": "",
-                "arquivo": txt.with_suffix(".pdf").name,
-                "link": f"https://dodf.df.gov.br (edição de {dia_str}, pág. {i})",
+                "secao": info.get("edicao", ""),
+                "arquivo": nome_pdf,
+                "pagina": str(impressa),
+                "edicao": info.get("edicao"),
+                "orgao_publicador": None,
+                "tipo_ato": None,
+                "link": f"{link}#page={impressa}" if link else "https://dodf.df.gov.br",
+                "link_tipo": "pdf_pagina" if link else "portal",
+                "link_pagina": link or "https://dodf.df.gov.br",
                 "texto": pagina.strip(),
             }
 
@@ -118,7 +196,7 @@ def main() -> int:
     vistos: list[str] = json.loads(VISTOS.read_text(encoding="utf-8")) if VISTOS.exists() else []
     candidatos, descartados_dedup = [], 0
 
-    for bloco in list(blocos_dou(dia_str)) + list(blocos_dodf(dia_str)):
+    for bloco in list(blocos_dou(dia, dia_str)) + list(blocos_dodf(dia_str)):
         texto_norm = _normalizar(re.sub(r"\s+", " ", bloco["texto"]))
         hits_sancao = _casa(texto_norm, redes["sancao"])
         hits_rodovia = _casa(texto_norm, redes["rodovia"])
@@ -135,21 +213,19 @@ def main() -> int:
         candidatos.append({
             "hash": h,
             "data_publicacao": dia_str,
-            "fonte": bloco["fonte"],
-            "secao": bloco["secao"],
-            "arquivo": bloco["arquivo"],
-            "link": bloco["link"],
             "termos_sancao": hits_sancao,
             "termos_rodovia": hits_rodovia,
-            "texto": bloco["texto"],   # trecho INTEIRO — vai assim para o LLM
+            **bloco,   # fonte, secao, arquivo, pagina, edicao, link, texto...
         })
 
     DADOS.mkdir(exist_ok=True)
     CANDIDATOS.write_text(
         json.dumps(candidatos, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    diretos = sum(1 for c in candidatos if c["link_tipo"] == "materia")
     print(f"[prefiltro] {len(candidatos)} candidatos -> {CANDIDATOS} "
-          f"({descartados_dedup} descartados por dedup)")
+          f"({descartados_dedup} descartados por dedup; "
+          f"{diretos} com link direto da matéria)")
     return 0
 
 

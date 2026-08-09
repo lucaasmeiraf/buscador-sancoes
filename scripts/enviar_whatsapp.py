@@ -21,6 +21,14 @@ from pathlib import Path
 
 import requests
 
+# Conveniência de teste local (lê o .env). Na nuvem as variáveis já vêm do
+# ambiente e o pacote não está instalado — por isso o import é opcional.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
 
 def enviar_texto(texto: str) -> dict:
     """Envia `texto` para WHATSAPP_DESTINO via Evolution API. Retorna o JSON da resposta.

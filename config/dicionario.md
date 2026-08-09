@@ -14,6 +14,11 @@ candidatos nos diários. Regras de uso:
 
 ## Rede SANÇÃO (o que aconteceu)
 
+> Nota: a rede de SANÇÃO é propositalmente mais ampla que o gatilho do lead. Aqui
+> entram rescisão, advertência e impedimento porque com frequência acompanham a
+> multa no mesmo ato. Quem separa é a qualificação: **sem multa não vira lead**
+> (regra 1 da Tarefa 2 em `prompts/rotina_sancoes.md`).
+
 - multa
 - multas
 - penalidade
@@ -35,6 +40,9 @@ candidatos nos diários. Regras de uso:
 - inexecucao parcial
 - inexecucao total
 - inadimplemento
+- atraso injustificado
+- termo de apenacao
+- apenacao
 - processo administrativo sancionador
 - processo administrativo de responsabilizacao
 - apuracao de responsabilidade
@@ -43,6 +51,13 @@ candidatos nos diários. Regras de uso:
 - decisao de aplicacao
 - clausula penal
 - glosa
+- art. 156
+- artigo 156
+- art. 87
+- artigo 87
+- lei 13.303
+- lei no 13.303
+- regulamento de licitacoes e contratos
 
 ## Rede RODOVIA (a quem/sobre o quê)
 
@@ -79,11 +94,24 @@ candidatos nos diários. Regras de uso:
 - der-df
 - der/df
 - novacap
+- terracap
+- valec
+- infra s.a.
+- infra s/a
+- sodf
 - infraestrutura viaria
 - malha viaria
 - malha rodoviaria
 - via urbana
 - estrada
+- crema
+- br-legal
+- revitaliza
+- proarte
+- superintendencia regional
+- obras rodoviarias
+- restauracao rodoviaria
+- engenharia pesada
 
 ## Órgãos-âncora (contam como rede RODOVIA)
 
@@ -93,4 +121,8 @@ candidatos nos diários. Regras de uso:
 - agencia nacional de transportes terrestres
 - ministerio dos transportes
 - secretaria de obras
+- secretaria de estado de obras
 - companhia urbanizadora da nova capital
+- companhia imobiliaria de brasilia
+- departamento de estradas de rodagem
+- departamento de engenharia e construcao
