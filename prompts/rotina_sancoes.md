@@ -98,6 +98,20 @@ Aplique nesta ordem e registre `qualificado: true/false` + `motivo_descarte`:
 Ordene os qualificados por urgência (data-limite de defesa mais próxima primeiro),
 com os de "valor a apurar" ao final.
 
+## Tarefa 2b — Enriquecimento (CEIS/CNEP)
+
+Grave os qualificados em `data/leads_hoje.json` e rode:
+
+```bash
+python scripts/enriquecer_sancoes.py --entrada data/leads_hoje.json
+```
+
+O script preenche `cnpj` (quando o diário não trouxe), `link_registro_sancao` e
+`sancoes_cadastro`, e marca `multiplas_sancoes` com base no histórico do cadastro.
+Sem a chave da API ele apenas avisa e devolve os leads intactos — **não é motivo
+para abortar**. Releia o arquivo depois de rodar: é a versão enriquecida que vai
+para a mensagem e para a planilha.
+
 ## Tarefa 3 — Resumo para WhatsApp
 
 Monte UMA mensagem em português claro, pronta para envio:
@@ -118,6 +132,7 @@ Monte UMA mensagem em português claro, pronta para envio:
    Publicado em: <data_publicacao> — <fonte>, edição <edicao>, pág. <pagina>
    Prazo estimado de defesa: até ~<data-limite> (<fase_processual>)
    Link: <link, copiado literalmente>
+   Registro de sanção: <link_registro_sancao, se houver>
 
 2) ...
 
@@ -139,8 +154,7 @@ Grave a mensagem final em `data/resumo.txt` e envie com
 
 ## Tarefa 4 — Planilha-mestre
 
-Grave os JSONs qualificados (a lista completa, não a mensagem) em
-`data/leads_hoje.json` e acrescente-os ao histórico com:
+Acrescente ao histórico o `data/leads_hoje.json` **já enriquecido** (Tarefa 2b):
 
 ```bash
 python scripts/planilha.py --entrada data/leads_hoje.json

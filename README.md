@@ -25,7 +25,10 @@ advogada.
    objeto = infraestrutura rodoviária, qualquer que seja o órgão; valor > R$ 200 mil
    (ou "valor a apurar"); prioriza publicações recentes com prazo de defesa aberto;
    sinaliza empresa reincidente; deduplica por hash.
-6. **Entrega** — resumo diário em português enviado por WhatsApp via Evolution API
+6. **Enriquecimento** — os leads qualificados passam pelo CEIS/CNEP
+   (`scripts/enriquecer_sancoes.py`) para ganhar CNPJ, link do registro de sanção
+   e histórico de sanções da empresa. Opcional: sem a chave da API a rotina segue.
+7. **Entrega** — resumo diário em português enviado por WhatsApp via Evolution API
    (`scripts/enviar_whatsapp.py`), e os leads acumulados na planilha-mestre
    `data/leads.csv` (`scripts/planilha.py`), com coluna de status para
    acompanhamento. Sem novidade → mensagem "sem novidades hoje".
@@ -58,8 +61,10 @@ Como criar a rotina, configurar o ambiente e agendar: **[docs/CONFIGURACAO.md](d
 | `config/dicionario.md` | Rede de palavras-chave do pré-filtro (ampla, editável). |
 | `scripts/coleta_inlabs.py` | Baixa as edições XML do DOU via INLABS. |
 | `scripts/coleta_dodf.py` | Baixa a edição do dia do DODF. |
+| `scripts/diagnostico_rede.py` | Testa o acesso às fontes e classifica a falha (allowlist / WAF / instabilidade). |
 | `scripts/links_dou.py` | Resolve o link exato da matéria no DOU (página conferida). |
 | `scripts/prefiltro.py` | Seleciona trechos candidatos por palavras-chave + dedup por hash. |
+| `scripts/enriquecer_sancoes.py` | Completa o lead com CNPJ e registro de sanção via CEIS/CNEP. |
 | `scripts/enviar_whatsapp.py` | Envia mensagem via Evolution API (POST). |
 | `scripts/planilha.py` | Acumula os leads em `data/leads.csv` sem duplicar nem apagar status. |
 | `prompts/rotina_sancoes.md` | Prompt principal de extração/qualificação da rotina. |

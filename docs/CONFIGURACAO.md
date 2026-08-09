@@ -30,6 +30,7 @@ ou no repositório. Os nomes estão em [`.env.example`](../.env.example):
 | `EVOLUTION_API_KEY` | API key da instância (gerada no servidor Evolution) |
 | `EVOLUTION_INSTANCE` | Nome da instância criada no servidor |
 | `WHATSAPP_DESTINO` | Número da advogada, formato internacional só dígitos (ex.: `5561999998888`) |
+| `PORTAL_TRANSPARENCIA_TOKEN` | **Opcional.** Chave da API do Portal da Transparência (CEIS/CNEP). Sem ela a rotina roda igual, só entrega o lead sem CNPJ do cadastro e sem link do registro de sanção. |
 
 ### 2.1 INLABS (Imprensa Nacional)
 
@@ -39,7 +40,19 @@ ou no repositório. Os nomes estão em [`.env.example`](../.env.example):
 3. Teste no navegador: logado, deve ser possível baixar os zips do dia
    (`AAAA-MM-DD-DO1.zip` etc.).
 
-### 2.2 Evolution API (WhatsApp)
+### 2.2 Portal da Transparência (CEIS/CNEP) — opcional
+
+1. Peça a chave em
+   <https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email> (gratuita,
+   chega por e-mail).
+2. Guarde o valor em `PORTAL_TRANSPARENCIA_TOKEN`.
+3. Acrescente `api.portaldatransparencia.gov.br` à allowlist do ambiente (§4.3).
+
+Sem essa chave a rotina funciona normalmente — o `enriquecer_sancoes.py` avisa e
+segue. O que se perde: CNPJ quando o diário não traz, o link do registro de
+sanção e o histórico de sanções anteriores da empresa.
+
+### 2.3 Evolution API (WhatsApp)
 
 1. No seu servidor Evolution API, crie uma instância (ex.: `buscador-sancoes`) e
    anote a **API key**.
@@ -162,7 +175,20 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
      `scripts/links_dou.py` tira o link exato de cada matéria. Sem esse domínio a
      rotina ainda funciona, mas cai para o link de página (menos preciso).
    - `dodf.df.gov.br` — download do DODF (ver `docs/ISSUES.md` §1 se falhar)
+   - `api.portaldatransparencia.gov.br` — enriquecimento CEIS/CNEP (só se usar a chave)
    - o domínio do seu servidor Evolution API
+
+   > ⚠️ Escreva **só o hostname**: `dodf.df.gov.br`, não `https://dodf.df.gov.br/`
+   > nem `dodf.gov` (que sequer existe) nem `www.dodf.df.gov.br` (os scripts
+   > chamam o domínio sem `www`). Um caractere a mais e o proxy bloqueia tudo,
+   > silenciosamente. Para conferir de dentro do ambiente:
+   >
+   > ```bash
+   > python scripts/diagnostico_rede.py
+   > ```
+   >
+   > Ele testa os três hosts e diz, para cada falha, se a causa é a allowlist, o
+   > WAF do site ou instabilidade — cada uma com solução diferente.
 
 > ⚠️ **Sobre segredos**: hoje o Claude Code em nuvem **não tem cofre de segredos**
 > dedicado — as env vars do ambiente ficam visíveis para quem usa aquele ambiente.

@@ -9,6 +9,15 @@ na etapa de extração, recebendo trechos já selecionados — nunca o diário i
 - Confirme que as env vars existem: `INLABS_LOGIN`, `INLABS_SENHA`,
   `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`, `WHATSAPP_DESTINO`.
 - Se alguma faltar, aborte e registre o erro (não invente valores).
+- Cheque o acesso às fontes:
+
+  ```bash
+  python scripts/diagnostico_rede.py
+  ```
+
+  Não aborte se falhar — o resultado é informativo. Copie a linha de motivo do
+  host que falhou para o aviso no fim da mensagem do WhatsApp: ela já diz se a
+  causa é a allowlist do ambiente, o WAF do site ou instabilidade.
 - Data de referência: hoje (fuso `America/Sao_Paulo`). Em segunda-feira, considere
   também sábado e domingo (o DOU não circula, mas edições extras podem existir).
 
@@ -19,8 +28,10 @@ python scripts/coleta_inlabs.py   # baixa XML do DOU do dia em data/raw/dou/
 python scripts/coleta_dodf.py     # baixa a edição do dia do DODF em data/raw/dodf/
 ```
 
-- Se uma fonte falhar (site fora do ar, login inválido), **continue com a outra** e
-  informe a falha no resumo final do WhatsApp.
+- Se uma fonte falhar (site fora do ar, login inválido, acesso bloqueado),
+  **continue com a outra** e informe a falha no resumo final do WhatsApp. Os
+  coletores já devolvem o motivo diagnosticado — reproduza-o como veio, sem
+  reinterpretar.
 
 ## 2. Pré-filtro por seleção (determinístico)
 
@@ -66,6 +77,18 @@ Aplique, nesta ordem:
 5. **Reincidência** — se a mesma empresa aparecer em mais de um trecho (hoje ou na
    planilha `data/leads.csv`), sinalize "múltiplas sanções".
 
+## 4b. Enriquecimento via CEIS/CNEP
+
+Grave os qualificados em `data/leads_hoje.json` e rode:
+
+```bash
+python scripts/enriquecer_sancoes.py --entrada data/leads_hoje.json
+```
+
+Preenche CNPJ, link do registro de sanção e histórico da empresa nos cadastros.
+Sem `PORTAL_TRANSPARENCIA_TOKEN` o script avisa e devolve os leads intactos —
+**não aborte por isso**. Use o arquivo enriquecido nos passos seguintes.
+
 ## 5. Montar o resumo diário
 
 Para cada lead qualificado, monte o pacote:
@@ -89,8 +112,7 @@ python scripts/enviar_whatsapp.py --arquivo data/resumo.txt
 
 ## 7. Planilha-mestre
 
-Grave os leads **qualificados** (a lista de JSONs, não a mensagem) em
-`data/leads_hoje.json` e acrescente-os ao histórico:
+Acrescente ao histórico o `data/leads_hoje.json` já enriquecido (passo 4b):
 
 ```bash
 python scripts/planilha.py --entrada data/leads_hoje.json

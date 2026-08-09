@@ -14,42 +14,67 @@ bloqueio de acesso a `dodf.df.gov.br`. Localmente (rede residencial) o mesmo
 script funciona — conferido em 09/08/2026, baixando a edição 144 de 06/08/2026
 (íntegra, 84 páginas) e a edição extra 080.
 
-**Hipóteses, em ordem de custo para testar:**
+**O que o trace de 09/08/2026 estabeleceu:** o fluxo toca **um único host**,
+`dodf.df.gov.br` (131.72.221.239, faixa do próprio GDF) — sem redirect, sem CDN,
+sem segundo domínio. Então a allowlist precisa de exatamente uma entrada, e
+qualquer falha vem de um destes três lugares.
 
-1. `dodf.df.gov.br` não está na *allowlist* do ambiente de nuvem
-   (Network access → Custom → Allowed domains). Ver `docs/CONFIGURACAO.md` §4.3.
-   O domínio precisa estar listado exatamente assim, sem `https://` e sem barra.
-2. O site recusa o IP de datacenter da VM (WAF do GDF). Nesse caso a allowlist
-   não resolve: o sintoma é 403/503 vindo do próprio site, não do proxy.
-   Diagnóstico: numa run, comparar o corpo da resposta com o de uma execução
-   local — página de bloqueio do site é diferente de erro de proxy.
-3. O `POST /dodf/jornal/diario` exige o header `X-Requested-With` (já enviado) e
-   um `User-Agent` de navegador — hoje o script manda
-   `Mozilla/5.0 (buscador-sancoes)`. Se a hipótese 2 se confirmar, testar um UA
-   de navegador completo (foi exatamente isso que destravou o INLABS, issue 5).
+**Hipóteses, em ordem de probabilidade:**
+
+1. **Domínio errado na allowlist.** O relato foi de ter liberado "dodf.gov" —
+   esse nome **não resolve em DNS**. O host é `dodf.df.gov.br`, e a entrada tem
+   de ser só o hostname: sem `https://`, sem barra final e sem `www.` (os
+   scripts chamam o domínio sem `www`). Ver `docs/CONFIGURACAO.md` §4.3.
+2. **WAF do GDF recusando o IP de datacenter da VM.** Aí a allowlist não
+   resolve — o sintoma é 403/503 vindo do site, não do proxy.
+   Mitigação já aplicada: `coleta_dodf.py` passou a mandar `User-Agent` de
+   navegador completo, `Accept-Language` e `Referer`. Foi exatamente isso que
+   destravou o INLABS (issue 5), e o UA anterior era o curto
+   `Mozilla/5.0 (buscador-sancoes)`.
+3. **Instabilidade.** Coberta pelo retry (3 tentativas, espera crescente).
+
+**Como saber qual foi, sem adivinhar:** `scripts/diagnostico_rede.py` roda no
+passo 0 da rotina e classifica cada host — DNS que não resolve, bloqueio de
+proxy, recusa do WAF ou timeout — devolvendo uma frase com a ação
+correspondente. Os coletores usam o mesmo classificador quando desistem, e o
+motivo vai para a mensagem do WhatsApp.
 
 **Enquanto não resolve:** a rotina segue com o DOU e avisa a falha no fim da
-mensagem do WhatsApp (comportamento já previsto no passo 1 do `SKILL.md`).
+mensagem (comportamento já previsto no passo 1 do `SKILL.md`).
 
 ---
 
-## 2. Enriquecimento por CEIS / CNEP / e-Sanções não implementado
+## 2. Enriquecimento por CEIS / CNEP
 
-**Status:** aberta por decisão — adiada em 09/08/2026 para priorizar a precisão
-dos links.
+**Status:** implementado em 09/08/2026 — **falta a chave da API para valer em
+produção**, e falta conferir os nomes dos campos da resposta.
 
-O escopo (§2) trata o cruzamento com os cadastros de sanção como parte da busca,
-não como extra: "uma multa contratual pode sair no DOU como 'Termo de Apenação'
-sem CNPJ e sem valor; o mesmo caso aparece no CEIS/CNEP já com CNPJ e
-enquadramento". Dois campos do pacote de entrega (§3.2 e §4.3) dependem disso:
+`scripts/enriquecer_sancoes.py` consulta os endpoints `/ceis` e `/cnep` da API do
+Portal da Transparência e preenche `cnpj` (quando o diário não traz),
+`link_registro_sancao` (§4.3) e `sancoes_cadastro` (histórico que alimenta o
+sinal de "múltiplas sanções", §3.3).
 
-- `cnpj` — hoje fica "não informado" sempre que o diário não traz o número;
-- **link do registro de sanção** — hoje não existe no lead.
+**O que falta:**
 
-**Para implementar:** API do Portal da Transparência
-(`api.portaldatransparencia.gov.br`, endpoints CEIS e CNEP), que exige cadastro e
-chave própria (`PORTAL_TRANSPARENCIA_TOKEN`). Somar o domínio à allowlist do
-ambiente de nuvem.
+1. **A chave.** Gratuita, chega por e-mail:
+   <https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email>. Vai em
+   `PORTAL_TRANSPARENCIA_TOKEN`, e `api.portaldatransparencia.gov.br` precisa
+   entrar na allowlist. Sem a chave o script avisa e devolve os leads intactos —
+   a rotina não quebra.
+2. **Conferir o formato da resposta.** Os endpoints e o 401 sem chave foram
+   verificados, mas o **corpo** da resposta não — sem chave não dá para ver os
+   nomes dos campos. A leitura é defensiva (tenta mais de um caminho por campo e
+   guarda o registro bruto em `sancoes_cadastro[].bruto`), então o pior caso é
+   campo vindo vazio, não exceção. Na primeira execução com chave, olhar o
+   `bruto` e ajustar os caminhos em `_resumir()`.
+
+**Decisão embutida:** CNPJ descoberto por razão social só é aceito quando **todos**
+os registros do cadastro concordam num único CNPJ. Havendo divergência, o lead
+fica sem CNPJ e com `cnpj_origem: "ambíguo"` — colar o CNPJ da empresa errada num
+lead de prospecção é pior do que não ter CNPJ.
+
+**Fora de escopo por ora:** e-Sanções/TCDF (§2 do escopo) não tem API pública
+equivalente; ficaria como raspagem, e o CEIS já cobre boa parte do DF.
 
 ---
 

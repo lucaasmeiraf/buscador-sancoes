@@ -20,19 +20,59 @@ Dependência de extração de texto: pypdf (pip install pypdf).
 import json
 import re
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
 
+import diagnostico_rede
+
 BASE_URL = "https://dodf.df.gov.br"
+HOST = "dodf.df.gov.br"
 DESTINO = Path(__file__).resolve().parent.parent / "data" / "raw" / "dodf"
 
 # Brasília é UTC-3 fixo (sem horário de verão desde 2019). A API do site indexa
 # as edições pelo epoch da meia-noite local do dia.
 FUSO_BRASILIA = timezone(timedelta(hours=-3))
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (buscador-sancoes)"}
+# UA de navegador completo: o WAF do INLABS recusava o UA curto, e o DODF é
+# candidato ao mesmo comportamento (ver docs/ISSUES.md §1, hipótese 3).
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "pt-BR,pt;q=0.9",
+    "Referer": f"{BASE_URL}/",
+    # Exigido pela API do diário; inofensivo nos GETs de PDF.
+    "X-Requested-With": "XMLHttpRequest",
+}
+
+TENTATIVAS = 3
+
+
+def _obter(metodo: str, url: str, **kwargs) -> requests.Response:
+    """Requisição com retry e erro *diagnosticado* em vez de stack trace cru.
+
+    Motivo: a rotina roda sem ninguém olhando, e "falhou o DODF" não diz se o
+    problema é a allowlist do ambiente, o WAF do GDF ou o site fora do ar — três
+    causas com três soluções diferentes. Ver docs/ISSUES.md §1.
+    """
+    ultimo = None
+    for tentativa in range(1, TENTATIVAS + 1):
+        try:
+            resp = requests.request(metodo, url, headers=HEADERS, **kwargs)
+            resp.raise_for_status()
+            return resp
+        except requests.RequestException as erro:
+            ultimo = erro
+            if tentativa < TENTATIVAS:
+                print(f"[coleta_dodf] {metodo} falhou ({erro.__class__.__name__}), "
+                      f"tentativa {tentativa}/{TENTATIVAS}.")
+                time.sleep(10 * tentativa)
+
+    raise RuntimeError(diagnostico_rede.explicar(HOST, ultimo)) from ultimo
 
 
 def _listar_edicao(dia: date) -> list[dict]:
@@ -42,13 +82,12 @@ def _listar_edicao(dia: date) -> list[dict]:
     Inclui a íntegra e eventuais edições extras.
     """
     epoch = int(datetime(dia.year, dia.month, dia.day, tzinfo=FUSO_BRASILIA).timestamp())
-    resp = requests.post(
+    resp = _obter(
+        "POST",
         f"{BASE_URL}/dodf/jornal/diario",
         data={"data": str(epoch), "pagina": 1, "tpJornal": "", "letra": ""},
-        headers={**HEADERS, "X-Requested-With": "XMLHttpRequest"},
         timeout=120,
     )
-    resp.raise_for_status()
     lst_link_pdf = resp.json().get("lstLinkPdf") or {}
 
     arquivos = []
@@ -76,13 +115,12 @@ def baixar_dia(dia: date) -> Path | None:
         nome = item["arquivo"]
         destino_pdf = pasta_dia / nome
         print(f"[coleta_dodf] baixando {nome} ...")
-        r = requests.get(
+        r = _obter(
+            "GET",
             f"{BASE_URL}/dodf/jornal/visualizar-pdf",
             params={"pasta": item["pasta"], "arquivo": nome},
-            headers=HEADERS,
             timeout=300,
         )
-        r.raise_for_status()
         if not r.content.startswith(b"%PDF"):
             print(f"[coleta_dodf] {nome}: resposta não é PDF — pulando.")
             continue

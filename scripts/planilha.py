@@ -47,6 +47,7 @@ COLUNAS = [
     "edicao",
     "pagina",
     "link",
+    "link_registro_sancao",
     "hash",
     "status",
     "observacoes",
