@@ -6,40 +6,46 @@ Pendências conhecidas da automação. Atualizado em 09/08/2026.
 
 ## 1. DODF bloqueado no ambiente de nuvem (Routines)
 
-**Status:** aberta — impacto alto (perde-se metade das fontes: DER/DF, SODF,
-Terracap, Novacap).
+**Status:** causa identificada em 09/08/2026 — falta corrigir a allowlist e
+confirmar numa execução. Impacto alto enquanto aberta (perde-se metade das
+fontes: DER/DF, SODF, Terracap, Novacap).
 
 **Sintoma:** `scripts/coleta_dodf.py` falha nas execuções do Claude Routines por
 bloqueio de acesso a `dodf.df.gov.br`. Localmente (rede residencial) o mesmo
-script funciona — conferido em 09/08/2026, baixando a edição 144 de 06/08/2026
-(íntegra, 84 páginas) e a edição extra 080.
+script funciona — reconferido em 09/08/2026, listando a edição 145 de 07/08/2026
+e a edição extra 081-A.
 
-**O que o trace de 09/08/2026 estabeleceu:** o fluxo toca **um único host**,
-`dodf.df.gov.br` (131.72.221.239, faixa do próprio GDF) — sem redirect, sem CDN,
-sem segundo domínio. Então a allowlist precisa de exatamente uma entrada, e
-qualquer falha vem de um destes três lugares.
+**Causa identificada (09/08/2026):** a allowlist do cloud environment foi
+preenchida com `dodf.gov.br` — um hostname que **não existe em DNS**
+(`NameResolutionError`; conferido também nas variantes `dodf.gov` e
+`www.dodf.gov.br`, igualmente inexistentes). O host real tem um `df.` no meio:
+**`dodf.df.gov.br`** (131.72.221.239, faixa do próprio GDF; título da página:
+"Sistema de busca do novo Diário Oficial do Distrito Federal"). O formato da
+entrada estava certo (só hostname); o nome é que estava incompleto — com isso o
+proxy libera um domínio que não existe e segue bloqueando o que o script chama.
 
-**Hipóteses, em ordem de probabilidade:**
+O trace de 09/08/2026 também estabeleceu que o fluxo toca **um único host**
+(`dodf.df.gov.br`) — sem redirect, sem CDN, sem segundo domínio. A allowlist
+precisa de exatamente uma entrada.
 
-1. **Domínio errado na allowlist.** O relato foi de ter liberado "dodf.gov" —
-   esse nome **não resolve em DNS**. O host é `dodf.df.gov.br`, e a entrada tem
-   de ser só o hostname: sem `https://`, sem barra final e sem `www.` (os
-   scripts chamam o domínio sem `www`). Ver `docs/CONFIGURACAO.md` §4.3.
-2. **WAF do GDF recusando o IP de datacenter da VM.** Aí a allowlist não
-   resolve — o sintoma é 403/503 vindo do site, não do proxy.
-   Mitigação já aplicada: `coleta_dodf.py` passou a mandar `User-Agent` de
-   navegador completo, `Accept-Language` e `Referer`. Foi exatamente isso que
-   destravou o INLABS (issue 5), e o UA anterior era o curto
-   `Mozilla/5.0 (buscador-sancoes)`.
-3. **Instabilidade.** Coberta pelo retry (3 tentativas, espera crescente).
+**Correção (no painel, não no código):** em Network access → Custom → Allowed
+domains do cloud environment, trocar `dodf.gov.br` por `dodf.df.gov.br`.
+Nenhum script ou doc do repositório precisa mudar — todos já apontam para
+`dodf.df.gov.br`.
 
-**Como saber qual foi, sem adivinhar:** `scripts/diagnostico_rede.py` roda no
-passo 0 da rotina e classifica cada host — DNS que não resolve, bloqueio de
-proxy, recusa do WAF ou timeout — devolvendo uma frase com a ação
-correspondente. Os coletores usam o mesmo classificador quando desistem, e o
-motivo vai para a mensagem do WhatsApp.
+**Hipóteses residuais, se falhar mesmo após a correção:**
 
-**Enquanto não resolve:** a rotina segue com o DOU e avisa a falha no fim da
+1. **WAF do GDF recusando o IP de datacenter da VM** — sintoma é 403/503 vindo
+   do site, não do proxy. Mitigação já aplicada: `coleta_dodf.py` manda
+   `User-Agent` de navegador completo, `Accept-Language` e `Referer` (o mesmo
+   que destravou o INLABS, issue 5).
+2. **Instabilidade** — coberta pelo retry (3 tentativas, espera crescente).
+
+**Como confirmar sem esperar a rotina:** rodar
+`python scripts/diagnostico_rede.py` dentro do ambiente de nuvem — ele
+classifica cada host (DNS, proxy, WAF, timeout) e diz a ação correspondente.
+
+**Enquanto não fecha:** a rotina segue com o DOU e avisa a falha no fim da
 mensagem (comportamento já previsto no passo 1 do `SKILL.md`).
 
 ---

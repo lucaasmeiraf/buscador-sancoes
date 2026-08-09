@@ -197,10 +197,13 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
    - `api.portaldatransparencia.gov.br` — enriquecimento CEIS/CNEP (só se usar a chave)
    - o domínio do seu servidor Evolution API
 
-   > ⚠️ Escreva **só o hostname**: `dodf.df.gov.br`, não `https://dodf.df.gov.br/`
-   > nem `dodf.gov` (que sequer existe) nem `www.dodf.df.gov.br` (os scripts
-   > chamam o domínio sem `www`). Um caractere a mais e o proxy bloqueia tudo,
-   > silenciosamente. Para conferir de dentro do ambiente:
+   > ⚠️ Escreva **só o hostname e o nome completo**: `dodf.df.gov.br` — o `df.`
+   > no meio faz parte do domínio. Não use `https://dodf.df.gov.br/`, nem
+   > `dodf.gov.br`/`dodf.gov` (não existem em DNS — foi exatamente esse o erro
+   > que bloqueou o DODF na nuvem, ver `docs/ISSUES.md` §1), nem
+   > `www.dodf.df.gov.br` (os scripts chamam o domínio sem `www`). Um caractere
+   > a mais ou a menos e o proxy bloqueia tudo, silenciosamente. Para conferir
+   > de dentro do ambiente:
    >
    > ```bash
    > python scripts/diagnostico_rede.py
