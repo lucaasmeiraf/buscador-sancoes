@@ -48,6 +48,22 @@ ou no repositório. Os nomes estão em [`.env.example`](../.env.example):
 2. Guarde o valor em `PORTAL_TRANSPARENCIA_TOKEN`.
 3. Acrescente `api.portaldatransparencia.gov.br` à allowlist do ambiente (§4.3).
 
+A API autentica por **header**, não por query string: cada requisição leva
+`chave-api-dados: <token>` — a mesma coisa que a documentação do Portal descreve
+como `[{"key": "chave-api-dados", "value": "<token>"}]`. Isso já está
+implementado em [`scripts/enriquecer_sancoes.py`](../scripts/enriquecer_sancoes.py);
+a env var guarda **só o valor da chave**, sem o nome do header e sem aspas.
+
+Teste rápido da chave (substitua o CNPJ por qualquer um):
+
+```bash
+curl -H "chave-api-dados: $PORTAL_TRANSPARENCIA_TOKEN" \
+  "https://api.portaldatransparencia.gov.br/api-de-dados/ceis?pagina=1"
+```
+
+`401`/`403` = chave inválida ou ausente; `429` = limite por minuto estourado (o
+script já espera e repete nesse caso).
+
 Sem essa chave a rotina funciona normalmente — o `enriquecer_sancoes.py` avisa e
 segue. O que se perde: CNPJ quando o diário não traz, o link do registro de
 sanção e o histórico de sanções anteriores da empresa.
@@ -158,11 +174,14 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
    EVOLUTION_API_KEY=...
    EVOLUTION_INSTANCE=...
    WHATSAPP_DESTINO=...
+   PORTAL_TRANSPARENCIA_TOKEN=...
    TZ=America/Sao_Paulo
    ```
 
-   As seis primeiras são as mesmas da seção 2 (a lista canônica de nomes está em
-   [`.env.example`](../.env.example)). `TZ` não é segredo: a VM da nuvem roda em
+   As sete primeiras são as mesmas da seção 2 (a lista canônica de nomes está em
+   [`.env.example`](../.env.example)); `PORTAL_TRANSPARENCIA_TOKEN` é a única
+   opcional — sem ela a rotina roda igual, só sem o enriquecimento CEIS/CNEP.
+   `TZ` não é segredo: a VM da nuvem roda em
    UTC e os scripts usam a data local (`date.today()`), então sem ela uma
    execução agendada para depois das 21h de Brasília buscaria o diário do dia
    seguinte. Às 8h da manhã a data coincide, mas a variável evita a pegadinha
