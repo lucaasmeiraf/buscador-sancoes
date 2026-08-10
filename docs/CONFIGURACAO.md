@@ -281,9 +281,12 @@ data/leads.csv. Se alguma fonte falhar, siga com a outra e relate na mensagem.
   <https://claude.ai/settings/usage>).
 - A VM da rotina tem ~4 vCPUs / 16 GB RAM / 30 GB de disco — muito acima do que
   esta automação precisa.
-- Push: a nuvem sempre aceita push em branches `claude/*`; push direto na branch
-  principal funciona se ela não for protegida. Se protegerem a `master`, ajuste o
-  passo 7 do SKILL.md para abrir PR em vez de push direto.
+- Push: a nuvem sempre aceita push em branches `claude/*`. Push direto na
+  `master` pode ser recusado com **403 pelo proxy de git do ambiente** mesmo com
+  o app do GitHub autorizado com escrita — foi o observado em 10/08/2026. O
+  passo 8 do SKILL.md já prevê o fallback (branch `claude/estado-*` + PR) e a
+  verificação com `git ls-remote`; se o 403 persistir todo dia, o PR diário
+  precisa ser mergeado manualmente ou a restrição removida no painel.
 - Docs oficiais: <https://code.claude.com/docs/en/routines.md> e
   <https://code.claude.com/docs/en/cloud-environments.md>.
 

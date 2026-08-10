@@ -1,14 +1,38 @@
 # Issues abertas
 
-Pendências conhecidas da automação. Atualizado em 09/08/2026.
+Pendências conhecidas da automação. Atualizado em 10/08/2026.
 
 ---
 
 ## 1. DODF bloqueado no ambiente de nuvem (Routines)
 
-**Status:** causa identificada em 09/08/2026 — falta corrigir a allowlist e
-confirmar numa execução. Impacto alto enquanto aberta (perde-se metade das
+**Status:** reaberta em 10/08/2026 — a allowlist foi corrigida no painel e o
+bloqueio **persiste**. Impacto alto enquanto aberta (perde-se metade das
 fontes: DER/DF, SODF, Terracap, Novacap).
+
+**Novo achado (10/08/2026):** com a allowlist já correta no painel (entradas
+`dodf.df.gov.br` e `www.in.gov.br`, modo Custom, só hostname, valores
+persistindo após salvar, ambiente único na conta), a execução da rotina ainda
+recebeu recusa do proxy exatamente nesses dois hosts — enquanto
+`inlabs.in.gov.br` e o servidor Evolution (entradas da criação original do
+ambiente) passam. O DNS resolve e a conexão é recusada antes do site, ou seja,
+o formato das entradas não é o problema: **a execução está rodando com uma
+versão antiga da configuração de rede**. Hipótese principal: a rotina ficou
+presa ao snapshot do ambiente de quando foi criada e não herda edições
+posteriores da allowlist.
+
+**Próximos passos (nesta ordem):**
+
+1. Abrir a rotina, re-selecionar o Environment e salvar (força re-vincular à
+   configuração atual). Rodar de novo e observar o `diagnostico_rede.py` do
+   passo 0.
+2. Teste discriminante: abrir uma **sessão interativa** do Claude Code na web no
+   mesmo ambiente e rodar `python scripts/diagnostico_rede.py`. Se passar na
+   sessão e falhar na rotina, confirma o snapshot preso → recriar a rotina do
+   zero. Se falhar nos dois, o problema é o ambiente em si → recriar o ambiente
+   (ou abrir suporte).
+3. Se recriar a rotina/ambiente, conferir env vars e setup script (§4.3–4.4 do
+   guia) antes da primeira execução.
 
 **Sintoma:** `scripts/coleta_dodf.py` falha nas execuções do Claude Routines por
 bloqueio de acesso a `dodf.df.gov.br`. Localmente (rede residencial) o mesmo
@@ -31,7 +55,8 @@ precisa de exatamente uma entrada.
 **Correção (no painel, não no código):** em Network access → Custom → Allowed
 domains do cloud environment, trocar `dodf.gov.br` por `dodf.df.gov.br`.
 Nenhum script ou doc do repositório precisa mudar — todos já apontam para
-`dodf.df.gov.br`.
+`dodf.df.gov.br`. **Aplicada em 09/08/2026 — não resolveu** (ver "Novo achado"
+acima).
 
 **Hipóteses residuais, se falhar mesmo após a correção:**
 
@@ -133,3 +158,28 @@ estar em `requirements.txt` nem no setup script do ambiente de nuvem — o envio
 quebraria com `ModuleNotFoundError` numa VM limpa. O import passou a ser
 opcional: serve ao teste local e é ignorado na nuvem, onde as variáveis já vêm
 do ambiente.
+
+---
+
+## 7. Push do estado na `master` recusado com 403 pelo proxy de git
+
+**Status:** mitigada em 10/08/2026 no passo 8 do `SKILL.md` — falta confirmar
+numa execução.
+
+Na run de 10/08/2026, o `git push origin master` do passo 8 (persistência de
+`data/vistos.json` e `data/leads.csv`) foi recusado com **403** pelo proxy de
+git do ambiente de nuvem, apesar de o app do GitHub estar autorizado (o clone
+no início da run funciona). O agente improvisou um push via servidor MCP do
+GitHub, que **falhou silenciosamente**: `git ls-remote` local confirmou que
+nada chegou ao remoto, e o estado do dia se perdeu (risco de reprocessar os
+mesmos trechos no dia seguinte; num dia com lead, mensagem duplicada).
+
+**Mitigação aplicada:** o passo 8 do `SKILL.md` agora define o fallback
+determinístico (push em `claude/estado-AAAA-MM-DD` — sempre aceito — + PR +
+tentativa de merge), exige verificação com `git ls-remote origin master` e, se
+o estado não chegar à `master`, manda um segundo WhatsApp avisando, em vez de
+terminar em silêncio.
+
+**Aberto:** se o 403 na `master` for política fixa do proxy (e não configuração
+do repositório), o merge do PR diário fica manual — avaliar branch protegida +
+auto-merge, ou aceitar o clique diário.

@@ -124,9 +124,28 @@ advogada preenche à mão na planilha.
 ## 8. Persistir estado
 
 - Acrescente os hashes dos trechos processados hoje a `data/vistos.json`.
-- **Commit + push** de `data/vistos.json` **e `data/leads.csv`** para o repositório
-  (é isso que preserva a deduplicação e o histórico entre execuções, já que o
-  Routines clona o repo limpo a cada run).
+- **Commit** de `data/vistos.json` **e `data/leads.csv`** (é isso que preserva a
+  deduplicação e o histórico entre execuções, já que o Routines clona o repo
+  limpo a cada run). Depois, **push com fallback**, nesta ordem:
+
+  1. `git push origin master`.
+  2. Se der **403** (o proxy de git da nuvem pode recusar push direto na branch
+     principal), faça `git push origin HEAD:claude/estado-AAAA-MM-DD` — branches
+     `claude/*` são sempre aceitas — e abra um PR dessa branch para `master`
+     (`gh pr create`; se o `gh` não estiver disponível/autenticado, use o
+     servidor MCP do GitHub). Tente o merge imediato
+     (`gh pr merge --squash --delete-branch`); se o merge for recusado, deixe o
+     PR aberto.
+  3. **Verifique sempre**: `git ls-remote origin master` deve apontar para um
+     commit que contenha as mudanças de hoje. Não confie no exit code do
+     fallback — em 10/08/2026 um push "bem-sucedido" via MCP não chegou ao
+     remoto e o estado do dia se perdeu (ver `docs/ISSUES.md` §7).
+  4. Se após os passos acima o estado **não** estiver na `master`, envie uma
+     segunda mensagem curta no WhatsApp
+     (`python scripts/enviar_whatsapp.py --texto "..."`) avisando: estado do dia
+     não persistido + link do PR aberto (ou o erro do push). Nunca termine a run
+     silenciosamente nesse caso.
+
 - Não commite nada de `data/raw/`, nem `data/candidatos.json`, nem `data/leads_hoje.json`.
 
 ## Regras permanentes
