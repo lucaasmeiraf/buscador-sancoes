@@ -29,7 +29,8 @@ ou no repositório. Os nomes estão em [`.env.example`](../.env.example):
 | `EVOLUTION_API_URL` | URL base do servidor Evolution API, sem barra final (ex.: `https://evo.seudominio.com`) |
 | `EVOLUTION_API_KEY` | API key da instância (gerada no servidor Evolution) |
 | `EVOLUTION_INSTANCE` | Nome da instância criada no servidor |
-| `WHATSAPP_DESTINO` | Número da advogada, formato internacional só dígitos (ex.: `5561999998888`) |
+| `WHATSAPP_DESTINO` | Número da advogada (cliente) — **só recebe leads**. Formato internacional só dígitos (ex.: `5561999998888`) |
+| `WHATSAPP_ADMIN` | **Opcional.** Número do operador da automação — recebe os **alertas técnicos** (fonte bloqueada, push falhou). Sem ela os alertas ficam só no log da run; nunca são redirecionados para a cliente. |
 | `PORTAL_TRANSPARENCIA_TOKEN` | **Opcional.** Chave da API do Portal da Transparência (CEIS/CNEP). Sem ela a rotina roda igual, só entrega o lead sem CNPJ do cadastro e sem link do registro de sanção. |
 
 ### 2.1 INLABS (Imprensa Nacional)
@@ -174,13 +175,17 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
    EVOLUTION_API_KEY=...
    EVOLUTION_INSTANCE=...
    WHATSAPP_DESTINO=...
+   WHATSAPP_ADMIN=...
    PORTAL_TRANSPARENCIA_TOKEN=...
    TZ=America/Sao_Paulo
    ```
 
-   As sete primeiras são as mesmas da seção 2 (a lista canônica de nomes está em
-   [`.env.example`](../.env.example)); `PORTAL_TRANSPARENCIA_TOKEN` é a única
-   opcional — sem ela a rotina roda igual, só sem o enriquecimento CEIS/CNEP.
+   São as mesmas da seção 2 (a lista canônica de nomes está em
+   [`.env.example`](../.env.example)); `PORTAL_TRANSPARENCIA_TOKEN` e
+   `WHATSAPP_ADMIN` são as únicas opcionais — sem a primeira a rotina roda sem o
+   enriquecimento CEIS/CNEP; sem a segunda os alertas técnicos ficam só no log
+   (leads para a cliente em `WHATSAPP_DESTINO`, alertas técnicos para o operador
+   em `WHATSAPP_ADMIN` — nunca misturar).
    `TZ` não é segredo: a VM da nuvem roda em
    UTC e os scripts usam a data local (`date.today()`), então sem ela uma
    execução agendada para depois das 21h de Brasília buscaria o diário do dia
@@ -270,7 +275,9 @@ R$ 200 mil (ou sem valor expresso) em contrato de infraestrutura rodoviária.
 Copie link, edição e página dos candidatos sem alterar — nunca monte URL.
 Ao final, envie o resumo por WhatsApp (scripts/enviar_whatsapp.py), atualize a
 planilha (scripts/planilha.py) e faça commit+push apenas de data/vistos.json e
-data/leads.csv. Se alguma fonte falhar, siga com a outra e relate na mensagem.
+data/leads.csv (com o fallback e a verificação do passo 8 do SKILL.md). Se
+alguma fonte falhar, siga com a outra; detalhe técnico de falha vai só no
+alerta ao operador (enviar_whatsapp.py --admin), nunca na mensagem da cliente.
 ```
 
 ### 4.6 Limites úteis de saber

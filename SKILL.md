@@ -8,6 +8,7 @@ na etapa de extração, recebendo trechos já selecionados — nunca o diário i
 
 - Confirme que as env vars existem: `INLABS_LOGIN`, `INLABS_SENHA`,
   `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`, `EVOLUTION_INSTANCE`, `WHATSAPP_DESTINO`.
+  (`WHATSAPP_ADMIN` é opcional — sem ela os alertas técnicos ficam só no log.)
 - Se alguma faltar, aborte e registre o erro (não invente valores).
 - Cheque o acesso às fontes:
 
@@ -15,9 +16,10 @@ na etapa de extração, recebendo trechos já selecionados — nunca o diário i
   python scripts/diagnostico_rede.py
   ```
 
-  Não aborte se falhar — o resultado é informativo. Copie a linha de motivo do
-  host que falhou para o aviso no fim da mensagem do WhatsApp: ela já diz se a
-  causa é a allowlist do ambiente, o WAF do site ou instabilidade.
+  Não aborte se falhar — o resultado é informativo. Guarde a linha de motivo do
+  host que falhou para o **alerta técnico** do passo 6 (ela já diz se a causa é
+  a allowlist do ambiente, o WAF do site ou instabilidade). Detalhe técnico
+  **nunca** entra na mensagem da cliente.
 - Data de referência: hoje (fuso `America/Sao_Paulo`). Em segunda-feira, considere
   também sábado e domingo (o DOU não circula, mas edições extras podem existir).
 
@@ -29,9 +31,9 @@ python scripts/coleta_dodf.py     # baixa a edição do dia do DODF em data/raw/
 ```
 
 - Se uma fonte falhar (site fora do ar, login inválido, acesso bloqueado),
-  **continue com a outra** e informe a falha no resumo final do WhatsApp. Os
-  coletores já devolvem o motivo diagnosticado — reproduza-o como veio, sem
-  reinterpretar.
+  **continue com a outra**. O motivo diagnosticado que o coletor devolve vai
+  **inteiro e sem reinterpretar** para o alerta técnico (passo 6); na mensagem
+  da cliente entra no máximo uma linha neutra (ver passo 5).
 
 ## 2. Pré-filtro por seleção (determinístico)
 
@@ -100,7 +102,11 @@ Para cada lead qualificado, monte o pacote:
 Formato da mensagem: português claro, um bloco por lead, leads mais urgentes
 primeiro (prazo mais curto). Se não houver leads: mensagem única
 **"Sem novidades hoje — nenhuma sanção qualificada nos diários de <data>."**
-Inclua ao final avisos de falha de coleta, se houver.
+
+**A mensagem da cliente não carrega detalhe técnico.** Se uma fonte não foi
+coletada, acrescente no máximo uma linha neutra — ex.: *"Hoje o DODF não pôde
+ser verificado; a checagem cobre o DOU."* — sem mencionar proxy, allowlist,
+WAF, push, git ou qualquer outro termo de infraestrutura.
 
 ## 6. Enviar por WhatsApp
 
@@ -109,6 +115,18 @@ python scripts/enviar_whatsapp.py --arquivo data/resumo.txt
 ```
 
 (ou importe `enviar_whatsapp.enviar_texto()` e passe a mensagem montada).
+
+**Alerta técnico (separado, só para o operador):** se houve falha de coleta,
+host bloqueado no passo 0 ou qualquer anomalia operacional, envie os detalhes
+completos (motivo diagnosticado como veio dos scripts) para o operador:
+
+```bash
+python scripts/enviar_whatsapp.py --admin --texto "..."
+```
+
+O `--admin` usa `WHATSAPP_ADMIN`; se a variável não existir, o script descarta
+o alerta com aviso no log — **nunca** envie conteúdo técnico para
+`WHATSAPP_DESTINO` como alternativa.
 
 ## 7. Planilha-mestre
 
@@ -140,11 +158,12 @@ advogada preenche à mão na planilha.
      commit que contenha as mudanças de hoje. Não confie no exit code do
      fallback — em 10/08/2026 um push "bem-sucedido" via MCP não chegou ao
      remoto e o estado do dia se perdeu (ver `docs/ISSUES.md` §7).
-  4. Se após os passos acima o estado **não** estiver na `master`, envie uma
-     segunda mensagem curta no WhatsApp
-     (`python scripts/enviar_whatsapp.py --texto "..."`) avisando: estado do dia
-     não persistido + link do PR aberto (ou o erro do push). Nunca termine a run
-     silenciosamente nesse caso.
+  4. Se após os passos acima o estado **não** estiver na `master`, envie um
+     alerta técnico **ao operador**
+     (`python scripts/enviar_whatsapp.py --admin --texto "..."`) avisando:
+     estado do dia não persistido + link do PR aberto (ou o erro do push).
+     Nunca termine a run silenciosamente nesse caso — e nunca mande esse
+     aviso para a cliente (`WHATSAPP_DESTINO`).
 
 - Não commite nada de `data/raw/`, nem `data/candidatos.json`, nem `data/leads_hoje.json`.
 
