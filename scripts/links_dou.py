@@ -23,6 +23,7 @@ Uso direto (diagnóstico):
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import unicodedata
@@ -31,8 +32,19 @@ from pathlib import Path
 
 import requests
 
+# Endereços públicos do DOU. São o que vale nos LINKS entregues à cliente —
+# nunca mudam, mesmo quando a coleta passa por relay.
 BASE_LEITURA = "https://www.in.gov.br/leiturajornal"
 BASE_MATERIA = "https://www.in.gov.br/web/dou/-/"
+
+# De onde BAIXAR o índice. `IN_GOV_BASE_URL` aponta para o relay quando o
+# ambiente não alcança o www.in.gov.br (docs/ISSUES.md §1 e §8). Vazio = site
+# oficial. Ex.: https://relay.exemplo.host/ingov
+LEITURA_DOWNLOAD = (
+    os.environ.get("IN_GOV_BASE_URL", "").rstrip("/") + "/leiturajornal"
+    if os.environ.get("IN_GOV_BASE_URL")
+    else BASE_LEITURA
+)
 CACHE = Path(__file__).resolve().parent.parent / "data" / "raw" / "dou"
 
 # O portal responde 403/HTML reduzido para clientes sem cara de navegador.
@@ -83,7 +95,7 @@ def link_materia(url_title: str) -> str:
 def _baixar_indice(dia: date, secao: str) -> list[dict]:
     """Baixa o JSON de matérias que o `leiturajornal` embute na própria página."""
     resp = requests.get(
-        BASE_LEITURA,
+        LEITURA_DOWNLOAD,
         params={"data": dia.strftime("%d-%m-%Y"), "secao": secao},
         headers=HEADERS,
         timeout=120,

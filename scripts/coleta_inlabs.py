@@ -24,7 +24,14 @@ from pathlib import Path
 
 import requests
 
-BASE_URL = "https://inlabs.in.gov.br"
+# Endereço oficial do INLABS. Vale nos headers que o WAF confere (Origin e
+# Referer), mesmo quando a coleta passa por relay.
+SITE_OFICIAL = "https://inlabs.in.gov.br"
+
+# De onde baixar. `INLABS_BASE_URL` aponta para o relay quando o ambiente não
+# alcança o site (docs/ISSUES.md §1). Vazio = site oficial.
+# Ex.: https://relay.exemplo.host/inlabs
+BASE_URL = (os.environ.get("INLABS_BASE_URL") or SITE_OFICIAL).rstrip("/")
 # Seções baixadas por padrão: 1 (atos/decisões) e 3 (extratos/avisos de penalidade).
 # Seção 2 (pessoal) raramente traz lead — acrescente "DO2" se necessário.
 SECOES = ["DO1", "DO3"]
@@ -40,8 +47,10 @@ HEADERS = {
     ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "pt-BR,pt;q=0.9",
-    "Origin": BASE_URL,
-    "Referer": f"{BASE_URL}/logar.php",
+    # Sempre o site oficial: é o que o WAF espera ver. Com o hostname do relay
+    # aqui, o POST de login volta a ser recusado.
+    "Origin": SITE_OFICIAL,
+    "Referer": f"{SITE_OFICIAL}/logar.php",
 }
 
 

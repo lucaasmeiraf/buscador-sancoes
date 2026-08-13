@@ -4,6 +4,33 @@ Pendências conhecidas da automação. Atualizado em 12/08/2026.
 
 ---
 
+## 0. O proxy do ambiente recusa domínios `.gov.br` por categoria
+
+**Status:** aberta (13/08/2026), contornada pelo relay — a mesma solução da §1,
+estendida às três fontes.
+
+**Sintoma:** `CONNECT 403` (recusa do proxy do Claude, antes de sair para a
+internet) em `inlabs.in.gov.br` e `www.in.gov.br`, com a allowlist correta e
+conferida entrada por entrada. O `inlabs` **funcionava neste mesmo ambiente
+até 11/08** e parou sem nenhuma mudança de configuração do nosso lado.
+
+**Por que não é allowlist:** na mesma sessão, o host do relay
+(`*.easypanel.host`) — a entrada **mais recente** da lista — passa normalmente.
+Edições da allowlist aplicam; o que não passa são os domínios governamentais.
+Some-se a isso o `dodf.df.gov.br`, cujo túnel **abria** em 12/08 (a conexão
+morria depois, no firewall do GDF — §1) e agora nem abre.
+
+**Contorno:** as três fontes passam pelo relay do VPS
+(`docs/CONFIGURACAO.md` §4.6), via `DODF_BASE_URL`, `INLABS_BASE_URL` e
+`IN_GOV_BASE_URL`. O VPS alcança as três (medido em 13/08: INLABS 302,
+`www.in.gov.br` 301, DODF 202) e o proxy libera o host do relay.
+
+**Vale reportar ao suporte da Anthropic:** se for política nova, é bom saber;
+se for regressão, tende a voltar sozinha. De qualquer forma o relay já não
+depende disso.
+
+---
+
 ## 1. O firewall do GDF derruba conexões vindas da VM da nuvem
 
 **Status:** causa raiz identificada em 12/08/2026 (a terceira e definitiva).
@@ -258,11 +285,9 @@ medir: `data/candidatos.json` traz `link_tipo` em cada candidato, e o
 - da nuvem: `curl -v https://www.in.gov.br/ 2>&1 | tail -8` — reset após
   `CONNECT ... 200` confirma firewall do destino.
 
-**Saídas, em ordem de preferência:**
-
-1. Segundo `location` no mesmo relay da §1 (ex.: `/leiturajornal` →
-   `www.in.gov.br`) + suporte a base configurável em `links_dou.py` — pequeno,
-   mesmo padrão do `DODF_BASE_URL`.
-2. Resolver os `urlTitle` no workflow do Actions quando a conta destravar,
-   publicando um índice do dia na branch `dados/dodf`.
-3. Aceitar o link de página. É o estado atual, e não bloqueia a entrega.
+**Resolvida em 13/08/2026 pela mesma via da §0:** `links_dou.py` ganhou
+`IN_GOV_BASE_URL`, que aponta o **download do índice** para o relay
+(`/ingov/`), enquanto `BASE_LEITURA`/`BASE_MATERIA` — os endereços que vão nos
+links da cliente — seguem no site oficial. Falta confirmar numa run com a
+variável definida: o número de candidatos com `link_tipo: "materia"` deve
+voltar aos ~80% medidos localmente (41 de 51 em 12/08).

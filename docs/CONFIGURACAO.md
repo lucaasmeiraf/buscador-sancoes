@@ -364,10 +364,10 @@ serviço do painel. Passo a passo (validado em 12/08/2026):
        # instante, o container entra em crash-loop e o Traefik devolve 502.
        resolver 127.0.0.11 valid=300s ipv6=off;
 
-       # Encaminha só /dodf/ ao diário oficial. Destino fixo — não é proxy aberto.
+       # --- DODF (PDF do diário do DF) ---
        location /dodf/ {
-           set $destino https://dodf.df.gov.br;
-           proxy_pass $destino$request_uri;      # preserva caminho + query
+           set $dodf https://dodf.df.gov.br;
+           proxy_pass $dodf$request_uri;         # preserva caminho + query
            proxy_set_header Host dodf.df.gov.br;
            proxy_ssl_server_name on;
            proxy_ssl_name dodf.df.gov.br;
@@ -375,9 +375,39 @@ serviço do painel. Passo a passo (validado em 12/08/2026):
            proxy_buffering off;                  # PDFs grandes: stream direto
        }
 
+       # --- INLABS (XML do DOU; login com cookies de sessão e de WAF) ---
+       location /inlabs/ {
+           rewrite ^/inlabs/(.*)$ /$1 break;
+           set $inlabs https://inlabs.in.gov.br;
+           proxy_pass $inlabs;
+           proxy_set_header Host inlabs.in.gov.br;
+           proxy_ssl_server_name on;
+           proxy_ssl_name inlabs.in.gov.br;
+           # Os cookies precisam valer no domínio do relay, e os redirects do
+           # login não podem jogar o cliente de volta no host real.
+           proxy_cookie_domain inlabs.in.gov.br $host;
+           proxy_cookie_path / /inlabs/;
+           proxy_redirect https://inlabs.in.gov.br/ /inlabs/;
+           proxy_read_timeout 300s;
+           proxy_buffering off;                  # zips do DOU são grandes
+       }
+
+       # --- www.in.gov.br (índice que dá o link exato da matéria) ---
+       location /ingov/ {
+           rewrite ^/ingov/(.*)$ /$1 break;
+           set $ingov https://www.in.gov.br;
+           proxy_pass $ingov;
+           proxy_set_header Host www.in.gov.br;
+           proxy_ssl_server_name on;
+           proxy_ssl_name www.in.gov.br;
+           proxy_read_timeout 120s;
+       }
+
        location / { return 404; }
    }
    ```
+
+   Cada `location` é um destino fixo — não é proxy aberto.
 
 4. Em **Domains**: adicione um domínio com **Port 80** (o EasyPanel gera um
    subdomínio `*.easypanel.host`; o Traefik cuida do HTTPS sozinho). Anote o
@@ -396,7 +426,18 @@ serviço do painel. Passo a passo (validado em 12/08/2026):
    metades — e depois de salvar, **abra uma sessão nova** (sessões abertas
    congelam a configuração de rede do momento em que iniciaram):
    - Network access → Custom → Allowed domains: o hostname do relay;
-   - env vars: `DODF_BASE_URL=https://RELAY` (sem barra final).
+   - env vars, uma por fonte:
+
+     ```
+     DODF_BASE_URL=https://RELAY
+     INLABS_BASE_URL=https://RELAY/inlabs
+     IN_GOV_BASE_URL=https://RELAY/ingov
+     ```
+
+   Como o proxy do ambiente passou a recusar domínios `.gov.br` por categoria
+   (13/08/2026 — `CONNECT 403` até em host que funcionava antes), **as três
+   fontes** passam pelo relay. Sem as variáveis, os scripts falam direto com os
+   sites — é o modo local, e continua funcionando.
 
 Falhas conhecidas e o que significam:
 
