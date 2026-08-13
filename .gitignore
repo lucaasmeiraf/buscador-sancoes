@@ -6,6 +6,7 @@
 data/raw/
 data/candidatos.json
 data/candidatos/
+data/estatisticas.json
 data/leads_hoje.json
 data/resumo.txt
 # Blocos do DODF trazidos da branch `dados/dodf` — vivem lá, não na master.

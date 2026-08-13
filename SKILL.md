@@ -103,6 +103,13 @@ Aplique, nesta ordem:
    14.133/2021 — indique que é estimativa). Priorize publicações recentes.
 5. **Reincidência** — se a mesma empresa aparecer em mais de um trecho (hoje ou na
    planilha `data/leads.csv`), sinalize "múltiplas sanções".
+6. **Registro dos descartes** — para cada candidato descartado que era uma
+   **sanção real a empresa identificável**, guarde uma linha curta para o
+   rodapé do passo 5: empresa + motivo em linguagem de critério — ex.:
+   *"multa de R$ 45 mil, abaixo do corte"*, *"rescisão sem multa"*, *"obra de
+   saneamento, fora do escopo rodoviário"*. Trechos que nem eram sanção a
+   empresa (pautas, editais, avisos, licenças) **não** ganham linha — entram
+   só na contagem agregada.
 
 ## 4b. Enriquecimento via CEIS/CNEP
 
@@ -125,8 +132,29 @@ Para cada lead qualificado, monte o pacote:
 > defesa · fase processual · link da publicação
 
 Formato da mensagem: português claro, um bloco por lead, leads mais urgentes
-primeiro (prazo mais curto). Se não houver leads: mensagem única
+primeiro (prazo mais curto). Se não houver leads, abra com
 **"Sem novidades hoje — nenhuma sanção qualificada nos diários de <data>."**
+(o rodapé abaixo entra mesmo assim — é ele que mostra que a checagem
+aconteceu).
+
+**Rodapé de transparência (sempre, inclusive em dia sem lead).** Feche a
+mensagem com um bloco curto montado a partir de `data/estatisticas.json`
+(contagens — nunca estime números) e dos registros do passo 4.6 (motivos):
+
+> _Verificação de hoje: N publicações do DOU (seções 1 e 3) e as M páginas do
+> DODF (edição E). X trechos mencionavam sanção ou penalidade; L viraram
+> leads. Não viraram: Empresa A (multa de R$ 45 mil, abaixo do corte de
+> R$ 200 mil); Empresa B (obra de saneamento, fora do escopo rodoviário).
+> Os demais Z trechos não traziam sanção com multa a empresa._
+
+Regras do rodapé:
+
+- No máximo **8 empresas nomeadas**; passando disso, agrupe os excedentes por
+  motivo ("e mais K casos de multa abaixo do corte").
+- Se `estatisticas.json` disser `origem: "externa"` no DODF (sem contagem de
+  páginas), escreva só "e o DODF (edição E)".
+- Motivo é sempre **critério do escopo** (multa, valor, objeto) — nada de
+  termo técnico.
 
 **A mensagem da cliente não carrega detalhe técnico.** Se uma fonte não foi
 coletada, acrescente no máximo uma linha neutra — ex.: *"Hoje o DODF não pôde

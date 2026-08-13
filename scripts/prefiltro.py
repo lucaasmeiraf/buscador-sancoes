@@ -47,6 +47,10 @@ CANDIDATOS = DADOS / "candidatos.json"
 # Um arquivo por candidato, dimensionado para a ferramenta de leitura do agente.
 CANDIDATOS_DIR = DADOS / "candidatos"
 VISTOS = DADOS / "vistos.json"
+# Contagens do dia (quanto foi examinado, por fonte) — insumo do rodapé de
+# transparência da mensagem (passo 5 do SKILL.md). Determinístico de propósito:
+# número que a cliente lê não pode ser estimativa do LLM.
+ESTATISTICAS = DADOS / "estatisticas.json"
 # Blocos do DODF selecionados fora do sandbox (branch `dados/dodf`).
 DODF_EXTERNO = DADOS / "dodf"
 
@@ -310,7 +314,24 @@ def main() -> int:
     vistos: list[str] = json.loads(VISTOS.read_text(encoding="utf-8")) if VISTOS.exists() else []
     candidatos, descartados_dedup = [], 0
 
+    # Origem do DODF hoje: define como interpretar as contagens (blocos
+    # externos já vêm selecionados — não são "páginas examinadas").
+    if (DADOS / "raw" / "dodf" / dia_str).exists():
+        dodf_origem = "local"
+    elif (DODF_EXTERNO / dia_str / "blocos.json").exists():
+        dodf_origem = "externa"
+    else:
+        dodf_origem = "ausente"
+
+    examinados = {"DOU": 0, "DODF": 0}
+    selecionados = {"DOU": 0, "DODF": 0}
+    edicoes_dodf: set[str] = set()
+
     for bloco in list(blocos_dou(dia, dia_str)) + list(blocos_dodf(dia_str)):
+        examinados[bloco["fonte"]] += 1
+        if bloco["fonte"] == "DODF" and bloco.get("edicao"):
+            edicoes_dodf.add(str(bloco["edicao"]))
+
         selecao = _selecionar(bloco, redes)
         if selecao is None:
             continue
@@ -321,6 +342,7 @@ def main() -> int:
             descartados_dedup += 1
             continue
 
+        selecionados[bloco["fonte"]] += 1
         candidatos.append({
             "hash": h,
             "data_publicacao": dia_str,
@@ -334,6 +356,22 @@ def main() -> int:
         json.dumps(candidatos, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     _gravar_individuais(candidatos)
+    ESTATISTICAS.write_text(json.dumps({
+        "data": dia_str,
+        "dou": {
+            "materias_examinadas": examinados["DOU"],
+            "candidatos": selecionados["DOU"],
+        },
+        "dodf": {
+            "origem": dodf_origem,
+            # Blocos externos já chegam selecionados: contar como "páginas
+            # examinadas" inflaria a transparência com um número falso.
+            "paginas_examinadas": examinados["DODF"] if dodf_origem == "local" else None,
+            "edicoes": sorted(edicoes_dodf),
+            "candidatos": selecionados["DODF"],
+        },
+        "descartados_dedup": descartados_dedup,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
     diretos = sum(1 for c in candidatos if c["link_tipo"] == "materia")
     print(f"[prefiltro] {len(candidatos)} candidatos -> {CANDIDATOS} "
           f"e {CANDIDATOS_DIR}{os.sep}NNN-*.txt (um por trecho; "
