@@ -69,11 +69,21 @@ python scripts/prefiltro.py       # gera data/candidatos.json
 ## 3. Extração via LLM
 
 - Abra `prompts/rotina_sancoes.md` e siga-o como prompt de extração.
-- Processe os trechos de `data/candidatos.json` (em lotes, se forem muitos) e produza
-  um JSON por trecho com os campos: empresa, CNPJ, órgão sancionador, tipo de
-  penalidade, se **tem multa**, valor da multa (ou percentual + valor do contrato),
-  fundamento legal, objeto do contrato, nº contrato/processo, data de publicação,
-  fase processual — mais `link`/`pagina`/`edicao` **copiados do candidato**.
+- Os candidatos saem do passo 2 em dois formatos: `data/candidatos.json`
+  (canônico, para scripts) e `data/candidatos/NNN-<hash>.txt` — **um arquivo
+  por trecho**, com os metadados no cabeçalho e o texto após `--- TEXTO ---`.
+- **Leia os arquivos individuais, um a um, e nunca o JSON inteiro** — numa
+  edição cheia ele passa de 800KB e estoura o limite da ferramenta de leitura
+  (foi o que travou a run de 13/08/2026). Também não concatene tudo num
+  arquivo único para ler depois: é o mesmo estouro com outro nome. Se um
+  candidato isolado for grande demais para uma leitura (matérias longas do
+  DOU existem), leia **esse arquivo** em partes com offset/limit — não mude
+  de estratégia.
+- Para cada arquivo, produza um JSON com os campos: empresa, CNPJ, órgão
+  sancionador, tipo de penalidade, se **tem multa**, valor da multa (ou
+  percentual + valor do contrato), fundamento legal, objeto do contrato,
+  nº contrato/processo, data de publicação, fase processual — mais
+  `link`/`pagina`/`edicao` **copiados do cabeçalho do candidato**.
 - Não descarte nada nesta etapa — a qualificação vem depois.
 
 ## 4. Qualificação

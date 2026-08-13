@@ -210,6 +210,31 @@ GitHub, e não afeta o workflow do Actions — lá o push é feito pelo
 
 ---
 
+## 9. Extração travou ao ler `candidatos.json` inteiro
+
+**Status:** resolvida em 13/08/2026 — falta confirmar numa run completa.
+
+Na primeira execução completa pela nuvem (13/08/2026), o agente tentou ler
+`data/candidatos.json` de uma vez — 803KB num dia cheio — e a ferramenta de
+leitura recusou (limite de 256KB por arquivo). O contorno improvisado
+(concatenar tudo num `dump.txt` do scratchpad e ler de novo) estourou o mesmo
+limite. A run parou **antes** da extração: nada foi enviado à cliente e
+`vistos.json` seguiu vazio, então o dia seguinte reprocessa sem duplicar.
+
+Não é limite de contexto do modelo — é o teto da ferramenta de leitura de
+arquivos, e a instrução "em lotes, se forem muitos" do passo 3 era vaga demais
+para impedir o engolimento de uma vez.
+
+**Correção (estrutural, não instrucional):** `prefiltro.py` agora grava também
+`data/candidatos/NNN-<hash>.txt` — um arquivo de texto por candidato, com
+metadados no cabeçalho, linhas quebradas em ≤1000 caracteres (a ferramenta
+trunca linhas muito longas) e tamanho típico de poucos KB. O passo 3 do
+`SKILL.md` manda ler esses arquivos um a um e proíbe explicitamente o JSON
+inteiro e os despejos concatenados. O `candidatos.json` continua existindo
+como artefato canônico para scripts.
+
+---
+
 ## 8. Link do DOU degradado: `www.in.gov.br` bloqueado na nuvem
 
 **Status:** aberta, descoberta em 12/08/2026 ao diagnosticar a §1.

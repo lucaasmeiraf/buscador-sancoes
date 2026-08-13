@@ -30,7 +30,9 @@ Uso:
 import argparse
 import hashlib
 import json
+import os
 import re
+import textwrap
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -42,6 +44,8 @@ RAIZ = Path(__file__).resolve().parent.parent
 DICIONARIO = RAIZ / "config" / "dicionario.md"
 DADOS = RAIZ / "data"
 CANDIDATOS = DADOS / "candidatos.json"
+# Um arquivo por candidato, dimensionado para a ferramenta de leitura do agente.
+CANDIDATOS_DIR = DADOS / "candidatos"
 VISTOS = DADOS / "vistos.json"
 # Blocos do DODF selecionados fora do sandbox (branch `dados/dodf`).
 DODF_EXTERNO = DADOS / "dodf"
@@ -253,6 +257,38 @@ def exportar_dodf(dia_str: str, destino: Path) -> int:
     return 0
 
 
+def _gravar_individuais(candidatos: list[dict]) -> None:
+    """Grava um arquivo de texto por candidato em data/candidatos/.
+
+    Existe porque a run de 13/08/2026 travou tentando ler o candidatos.json
+    inteiro (803KB) — acima do limite da ferramenta de leitura de arquivos do
+    agente (256KB). O formato é texto plano com linhas curtas de propósito: a
+    ferramenta também trunca linhas muito longas, o que mutilaria um JSON
+    minificado. O agente lê estes arquivos um a um no passo 3 do SKILL.md;
+    o candidatos.json continua sendo o artefato canônico para scripts.
+    """
+    if CANDIDATOS_DIR.exists():
+        for antigo in CANDIDATOS_DIR.glob("*.txt"):
+            antigo.unlink()
+    CANDIDATOS_DIR.mkdir(parents=True, exist_ok=True)
+
+    for i, c in enumerate(candidatos, start=1):
+        texto = "\n".join(
+            textwrap.fill(linha, width=1000) if len(linha) > 1000 else linha
+            for linha in c["texto"].splitlines()
+        )
+        campos = [f"{campo}: {c.get(campo) or ''}"
+                  for campo in ("hash", "fonte", "secao", "edicao", "pagina",
+                                "data_publicacao", "orgao_publicador",
+                                "tipo_ato", "link", "link_tipo", "link_pagina")]
+        campos.append("termos_sancao: " + ", ".join(c["termos_sancao"]))
+        campos.append("termos_rodovia: " + ", ".join(c["termos_rodovia"]))
+        (CANDIDATOS_DIR / f"{i:03d}-{c['hash'][:8]}.txt").write_text(
+            "\n".join(campos) + "\n\n--- TEXTO ---\n" + texto + "\n",
+            encoding="utf-8",
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("data", nargs="?", help="AAAA-MM-DD (padrão: hoje)")
@@ -297,9 +333,11 @@ def main() -> int:
     CANDIDATOS.write_text(
         json.dumps(candidatos, ensure_ascii=False, indent=2), encoding="utf-8"
     )
+    _gravar_individuais(candidatos)
     diretos = sum(1 for c in candidatos if c["link_tipo"] == "materia")
     print(f"[prefiltro] {len(candidatos)} candidatos -> {CANDIDATOS} "
-          f"({descartados_dedup} descartados por dedup; "
+          f"e {CANDIDATOS_DIR}{os.sep}NNN-*.txt (um por trecho; "
+          f"{descartados_dedup} descartados por dedup; "
           f"{diretos} com link direto da matéria)")
     return 0
 
