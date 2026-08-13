@@ -164,8 +164,28 @@ def baixar_dia(dia: date) -> Path | None:
     return pasta_dia
 
 
+def _neutralizar_cryptography_quebrada() -> None:
+    """Impede que uma cryptography de sistema podre derrube o import do pypdf.
+
+    A imagem da VM da nuvem traz uma cryptography cujo binding Rust não acha
+    `_cffi_backend` e explode com PanicException — que o fallback do pypdf
+    (escrito para ImportError) não captura. Sondamos o binding antes: se
+    estourar, bloqueamos o pacote em sys.modules, o `import cryptography` do
+    pypdf vira ImportError e ele cai no provider puro-Python. Nada se perde —
+    cryptography só serviria para PDF criptografado, e o DODF não é.
+    """
+    try:
+        import cryptography.hazmat.bindings._rust  # noqa: F401
+    except BaseException:  # PanicException herda de BaseException, não de Exception
+        import sys
+        for mod in [m for m in sys.modules if m.split(".")[0] == "cryptography"]:
+            del sys.modules[mod]
+        sys.modules["cryptography"] = None  # None => import levanta ImportError
+
+
 def _extrair_texto(pdf: Path) -> None:
     """Extrai o texto do PDF para um .txt ao lado (insumo do prefiltro)."""
+    _neutralizar_cryptography_quebrada()
     from pypdf import PdfReader  # import tardio: só é preciso se houver edição
 
     reader = PdfReader(str(pdf))
