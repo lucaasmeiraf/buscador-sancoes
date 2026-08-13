@@ -180,8 +180,13 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
    WHATSAPP_DESTINO=...
    WHATSAPP_ADMIN=...
    PORTAL_TRANSPARENCIA_TOKEN=...
+   DODF_BASE_URL=...
    TZ=America/Sao_Paulo
    ```
+
+   `DODF_BASE_URL` é o relay do DODF no VPS (§4.6) — na nuvem ela é necessária,
+   porque o firewall do GDF derruba conexões diretas da VM (`docs/ISSUES.md`
+   §1).
 
    São as mesmas da seção 2 (a lista canônica de nomes está em
    [`.env.example`](../.env.example)); `PORTAL_TRANSPARENCIA_TOKEN` e
@@ -205,17 +210,15 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
    - `api.portaldatransparencia.gov.br` — enriquecimento CEIS/CNEP (só se usar a chave)
    - o domínio do seu servidor Evolution API
 
-   - `dodf.df.gov.br` — **inclua ao criar um ambiente novo**: com ele presente
-     desde a criação, a rotina volta a baixar o DODF direto e o caminho via
-     GitHub Actions (§4.6) vira reserva. Num ambiente antigo a entrada não tem
-     efeito (é o problema da §1 do ISSUES) e a rotina cai no fallback sozinha.
+   `dodf.df.gov.br` na allowlist **não adianta**: o proxy até libera, mas o
+   firewall do GDF derruba a conexão vinda da VM (`docs/ISSUES.md` §1). O DODF
+   chega pela `DODF_BASE_URL` (relay no domínio da Evolution, já listado acima)
+   ou pela branch do GitHub Actions (§4.6).
 
-   > ⚠️ **A allowlist só vale se for preenchida na criação do ambiente.**
-   > Domínios acrescentados depois continuam bloqueados: o ambiente roda com uma
-   > cópia congelada da configuração de rede. Foi o que travou o DODF e o
-   > `www.in.gov.br` por três dias — diagnóstico completo em `docs/ISSUES.md`
-   > §1. Se precisar de um host novo, **recrie o ambiente** com a lista completa
-   > em vez de editar a existente.
+   > ⚠️ Allowlist liberada **não garante** acesso: o site de destino ainda pode
+   > recusar o IP da VM (foi o caso do DODF — e `www.in.gov.br` tem o mesmo
+   > sintoma, `docs/ISSUES.md` §8). Antes de culpar a allowlist, rode o
+   > diagnóstico abaixo — ele separa as duas assinaturas.
    >
    > Escreva **só o hostname e o nome completo**, sem `https://` e sem barra
    > final. Para conferir de dentro do ambiente:
@@ -319,17 +322,43 @@ O que precisa estar configurado no repositório:
 Nada disso depende do 403 de push da rotina (`docs/ISSUES.md` §7): o workflow
 usa o `GITHUB_TOKEN` emitido pelo GitHub, que não passa pelo proxy do Claude.
 
-**Plano B (secret `DODF_BASE_URL`).** Se o WAF do GDF recusar o IP do runner,
-suba um relay em host próprio — por exemplo um `location /dodf/` no nginx do
-servidor da Evolution API encaminhando para `https://dodf.df.gov.br` — e defina
-o secret `DODF_BASE_URL` com a base do relay. O coletor passa a baixar por lá e
-continua gerando links com o endereço oficial do diário (é o link que vai para a
-cliente). Nenhuma outra mudança é necessária.
+**Relay no VPS da Evolution API (caminho principal desde 12/08/2026).** O
+firewall do GDF derruba conexões vindas da VM da nuvem, mas aceita o VPS
+(`docs/ISSUES.md` §1) — e a nuvem alcança o VPS, que está na allowlist. O relay
+fecha o circuito. No nginx do VPS, dentro do bloco `server { listen 443 ssl; }`
+do domínio da Evolution:
 
-**Diagnóstico quando o DODF sumir do resumo:** abra a aba Actions do
-repositório. Falha do workflow = coleta quebrada; sucesso com `blocos.json`
-vazio = houve diário e nada casou com o dicionário. O texto integral do dia fica
-como artifact da execução por 14 dias.
+```nginx
+# Relay do DODF — encaminha só /dodf/ para o diário oficial (não é proxy
+# aberto: o destino é fixo). Ver docs/ISSUES.md §1 do buscador-sancoes.
+location /dodf/ {
+    proxy_pass https://dodf.df.gov.br/dodf/;
+    proxy_set_header Host dodf.df.gov.br;
+    proxy_ssl_server_name on;
+    proxy_ssl_name dodf.df.gov.br;
+    proxy_read_timeout 300s;
+    proxy_buffering off;        # os PDFs têm dezenas de MB — stream direto
+}
+```
+
+Depois de recarregar (`nginx -t && nginx -s reload`), teste de qualquer
+máquina: `curl -sI "https://SEU-DOMINIO/dodf/jornal/visualizar-pdf" | head -1`
+— qualquer resposta HTTP do DODF (mesmo 4xx) prova que o encaminhamento
+funciona. Por fim, defina nas env vars do ambiente de nuvem:
+
+```
+DODF_BASE_URL=https://SEU-DOMINIO
+```
+
+O coletor baixa pelo relay e **os links entregues à cliente continuam no site
+oficial** (`coleta_dodf.py` reescreve a URL). Sem `DODF_BASE_URL`, o coletor
+fala direto com `dodf.df.gov.br` — é o modo local/Actions.
+
+**Diagnóstico quando o DODF sumir do resumo:** com o relay ativo, confira o VPS
+(`curl` acima) e o alerta técnico da rotina. No caminho do Actions, abra a aba
+Actions do repositório: falha do workflow = coleta quebrada; sucesso com
+`blocos.json` vazio = houve diário e nada casou com o dicionário. O texto
+integral do dia fica como artifact da execução por 14 dias.
 
 ### 4.7 Limites úteis de saber
 

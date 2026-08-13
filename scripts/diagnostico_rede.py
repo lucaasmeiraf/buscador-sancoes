@@ -4,10 +4,12 @@
 Existe por causa da issue §1 de `docs/ISSUES.md`: o DODF falha no ambiente de
 nuvem e funciona local, e "falhou o DODF" não diz qual das três causas foi:
 
-1. **Allowlist do ambiente** — o proxy do Claude Cloud recusou o domínio.
-   Solução: acrescentar o host em Network access → Custom → Allowed domains.
-2. **WAF do site** — o domínio passou, mas o servidor recusou o IP da VM
-   (403/503 vindo do próprio site). Allowlist não resolve.
+1. **Allowlist do ambiente** — o proxy do Claude Cloud recusou o túnel
+   (CONNECT 403 → `ProxyError`). Solução: host em Network access → Custom →
+   Allowed domains, na criação do ambiente.
+2. **Firewall do site** — o proxy liberou e o destino derrubou a conexão
+   (reset no TLS) ou respondeu 403/503: o site recusa o IP da VM. Allowlist
+   não resolve; o caminho é um relay (ex.: `DODF_BASE_URL`).
 3. **Site fora do ar / lento** — 5xx ou timeout, transitório.
 
 Cada causa tem solução diferente, então a rotina precisa dizer qual foi em vez
@@ -64,10 +66,21 @@ def explicar(host: str, erro: Exception | None = None) -> str:
 
     status = getattr(getattr(erro, "response", None), "status_code", None)
 
-    if isinstance(erro, requests.ConnectionError) or status == 407:
-        return (f"{host}: conexão recusada antes de chegar ao site — cara de "
-                f"bloqueio do proxy do ambiente. Acrescente '{host}' em "
-                f"Network access → Custom → Allowed domains.")
+    # Ordem importa: ProxyError é subclasse de ConnectionError. As duas falhas
+    # eram tratadas como uma só e o "reset by peer" do firewall do GDF foi
+    # diagnosticado como allowlist por três dias (docs/ISSUES.md §1) — o curl -v
+    # de 12/08/2026 mostrou que o proxy recusa com CONNECT 403, e o reset vem
+    # do destino depois de o túnel abrir.
+    if isinstance(erro, requests.exceptions.ProxyError) or status == 407:
+        return (f"{host}: o proxy do ambiente recusou o túnel (CONNECT 403) — "
+                f"bloqueio de allowlist. Acrescente '{host}' em Network access "
+                f"→ Custom → Allowed domains (na criação do ambiente).")
+    if isinstance(erro, requests.ConnectionError):
+        return (f"{host}: o proxy liberou e a conexão foi derrubada pelo "
+                f"destino (reset) — firewall do site recusando o IP desta "
+                f"máquina. Allowlist não resolve; o caminho é coletar por um "
+                f"relay em host que o site aceite (ex.: DODF_BASE_URL) ou de "
+                f"outra rede.")
     if status in (401, 403):
         return (f"{host}: o site respondeu {status} — o domínio passou pelo "
                 f"proxy e quem recusou foi o servidor (WAF). Mexer na allowlist "

@@ -4,93 +4,84 @@ Pendências conhecidas da automação. Atualizado em 12/08/2026.
 
 ---
 
-## 1. A allowlist do ambiente de nuvem só honra o que foi cadastrado na criação
+## 1. O firewall do GDF derruba conexões vindas da VM da nuvem
 
-**Status:** contornada em 12/08/2026 (coleta do DODF movida para o GitHub
-Actions) — **falta a primeira execução do workflow para confirmar**. A causa
-raiz continua aberta, e ainda afeta `www.in.gov.br`.
+**Status:** causa raiz identificada em 12/08/2026 (a terceira e definitiva).
+Solução escolhida: **relay no servidor da Evolution API** via `DODF_BASE_URL` —
+falta configurar o nginx e validar uma coleta pela nuvem.
 
-**Diagnóstico (12/08/2026).** O problema nunca foi do DODF. Cruzando as três
-execuções, o que separa host que passa de host que falha é a **data de
-cadastro**, não o domínio:
+**Causa raiz (12/08/2026, curl -v de dentro do ambiente recriado):**
 
-| Host | Entrou na allowlist | Na nuvem |
-|---|---|---|
-| `inlabs.in.gov.br` | criação do ambiente | passa |
-| servidor Evolution | criação do ambiente | passa |
-| `dodf.df.gov.br` | edição posterior | bloqueado |
-| `www.in.gov.br` | edição posterior | bloqueado |
+```
+CONNECT tunnel established, response 200   <- o proxy do Claude LIBEROU o host
+TLS handshake, Client hello                <- a conexão saiu para a internet
+(~11s de silêncio)
+Recv failure: Connection reset by peer     <- quem derrubou foi o DESTINO
+```
 
-Nos dois bloqueados o DNS resolve e a conexão é recusada antes de chegar ao
-site — recusa do proxy, não do servidor. O ambiente roda com uma versão
-congelada da configuração de rede e não herda edições posteriores da allowlist.
+Contraprova no mesmo ambiente: um domínio fora da allowlist (`www.uol.com.br`)
+falha **diferente** — `CONNECT tunnel failed, response 403`, recusado pelo
+proxy antes de sair. Ou seja: a allowlist estava certa e funcionando; é o
+**firewall do GDF** que corta o TLS vindo do IP/faixa da VM do Claude (bloqueio
+anti-datacenter). E do VPS da Evolution API (também datacenter, outra faixa) o
+DODF responde em 0,4s — o GDF não bloqueia datacenter em geral, bloqueia a
+faixa da VM.
 
-Duas consequências:
+**Por que erramos duas vezes antes:** `diagnostico_rede.py` classificava
+qualquer `ConnectionError` como bloqueio de proxy — mas o reset do firewall do
+destino gera a mesma exceção. As duas hipóteses anteriores (nome errado na
+allowlist em 09/08; "allowlist congelada na criação" em 10-12/08) nasceram
+dessa classificação errada. O script agora separa as assinaturas (`ProxyError`
+= proxy; reset após túnel aberto = firewall do destino), para este erro não se
+repetir.
 
-1. **Qualquer solução que termine em "adicionar o host X na allowlist" está
-   morta** — inclusive trocar o DODF por outra fonte (Querido Diário, dados
-   abertos do GDF, mirror qualquer): fonte nova é host novo, e host novo é
-   bloqueio novo. Vale também para `api.portaldatransparencia.gov.br` (§2).
-2. **O DOU está degradado em silêncio.** Com `www.in.gov.br` bloqueado,
-   `links_dou.py` cai no link de página em vez do link da matéria. A rotina não
-   quebra, então isso não aparecia em lugar nenhum — ver §8.
+Consequências que continuam valendo:
 
-Descartado por este mesmo diagnóstico: a hipótese de 09/08/2026 de que a
-allowlist tinha sido preenchida com `dodf.gov.br` (hostname inexistente em DNS).
-Era verdade e foi corrigida para `dodf.df.gov.br` — e o bloqueio continuou,
-porque a correção *era uma edição posterior*.
+1. **Nenhuma mudança de allowlist resolve** — o bloqueio é do lado do GDF.
+2. **O DOU está degradado em silêncio**: `www.in.gov.br` falha com a mesma
+   digital (DNS ok, conexão recusada) — provavelmente o WAF do Serpro fazendo
+   o mesmo. `links_dou.py` cai no link de página em vez do link da matéria —
+   ver §8.
 
-**Contorno aplicado (12/08/2026): coletar fora do sandbox.**
-`.github/workflows/coleta-dodf.yml` roda `coleta_dodf.py` + a seleção do
-pré-filtro **dentro do GitHub**, que não conhece esse proxy, e publica os blocos
-já selecionados (poucos KB/dia) na branch `dados/dodf`. A rotina traz esses
-blocos com `git fetch` + `git archive` (passo 1 do `SKILL.md`) — o canal de rede
-que comprovadamente funciona de lá, já que o clone de toda run passa por ele.
+**Solução escolhida (12/08/2026): relay no servidor da Evolution API.**
+O VPS alcança o DODF e o ambiente da nuvem alcança o VPS (host na allowlist,
+WhatsApp passa por ele todo dia) — então um `location /dodf/` no nginx do VPS
+encaminhando para `https://dodf.df.gov.br` fecha o circuito. O coletor já está
+pronto: basta `DODF_BASE_URL` apontando para o domínio do VPS (env var do
+ambiente de nuvem), e os links entregues à cliente continuam no site oficial
+(o coletor reescreve). Configuração do nginx em `docs/CONFIGURACAO.md` §4.6.
 
-Escolhido em vez das alternativas por não depender nem do painel do Claude nem
-de infraestrutura própria:
+O ponto único de falha (VPS caiu = sem coleta e sem WhatsApp) é aceitável:
+sem o VPS a mensagem não sairia de qualquer jeito.
 
-- **Relay em host já liberado** (nginx no servidor da Evolution API
-  encaminhando para o DODF): funciona, mas põe a coleta e o WhatsApp no mesmo
-  ponto único de falha. Fica como plano B, e o código já está pronto para ele —
-  basta definir `DODF_BASE_URL` (secret do repositório) apontando para o relay.
-- **Recriar o ambiente** com a allowlist completa desde a criação: conserta tudo
-  de uma vez e sem código, mas aposta num comportamento de plataforma que pode
-  voltar a quebrar na próxima edição da allowlist.
+**Alternativa pronta e adormecida: GitHub Actions.**
+`.github/workflows/coleta-dodf.yml` roda a coleta + seleção dentro do GitHub e
+publica os blocos na branch `dados/dodf`, que a rotina já sabe ler (fallback do
+passo 1 do `SKILL.md`). Está bloqueado por outra razão: a conta GitHub está com
+trava de cobrança (*"account is locked due to a billing issue"*) — não é custo
+do workflow (~90 min/mês, dentro dos 2.000 gratuitos), é pendência da conta em
+<https://github.com/settings/billing>. Quando destravar, vale um teste: se o
+GDF aceitar o IP do runner (Azure), vira redundância do relay.
 
-**Verificado localmente em 12/08/2026:** coleta da edição 147 de 11/08 (+ extra
-082-A), exportação de 19 blocos selecionados, leitura pela rotina a partir da
-branch, e a mecânica git de ponta a ponta num remoto de teste (branch órfã,
-clone limpo, extração sem sujar o índice).
+**Verificado localmente em 12/08/2026:** coleta das edições 147 e 148 (+
+extras), exportação e leitura dos blocos pela via da branch (51 candidatos:
+44 DOU + 7 DODF), e a mecânica git de ponta a ponta num remoto de teste.
 
-**Bloqueio novo (12/08/2026): a conta GitHub está com trava de cobrança.** A
-primeira execução manual do workflow foi recusada com *"account is locked due
-to a billing issue"*. Não é custo do workflow — o volume aqui (~3 min/dia,
-~90 min/mês) cabe folgado nos 2.000 min/mês do plano gratuito para repositório
-privado. É uma pendência da própria conta (cartão/fatura/spending limit) que
-trava **todos** os Actions enquanto existir. Resolver em
-<https://github.com/settings/billing>; o workflow fica pronto esperando.
+**O passo 1 do `SKILL.md` é um funil com dois caminhos:** a rotina tenta
+`coleta_dodf.py` direto (com `DODF_BASE_URL` definido, isso já sai pelo relay)
+e, se falhar, cai para a branch `dados/dodf` do Actions. Alerta técnico só se
+**os dois** falharem.
 
-**Por causa disso, o passo 1 do `SKILL.md` virou um funil com dois caminhos
-(12/08/2026):** a rotina tenta `coleta_dodf.py` direto (funciona em ambiente
-recriado com a allowlist completa, ou via relay `DODF_BASE_URL`) e, se falhar,
-cai para a branch `dados/dodf` do Actions. Alerta técnico só se **os dois**
-falharem. Assim, qualquer uma das três portas que abrir primeiro — cobrança do
-GitHub resolvida, ambiente recriado, ou relay no ar — reativa o DODF sem novo
-deploy.
+**Para fechar esta issue:**
 
-**O que falta confirmar na primeira execução real do workflow (quando a conta
-destravar):**
-
-1. Se o WAF do GDF aceita o IP do runner do GitHub (Azure). Sintoma de recusa
-   seria 403/503 vindo do site — diferente do bloqueio de proxy. Se acontecer,
-   o plano B é o relay via `DODF_BASE_URL`; um self-hosted runner também
-   resolveria.
-2. Se o repositório está com Settings → Actions → General → Workflow
-   permissions em **Read and write** — sem isso o push na branch `dados/dodf`
-   falha.
-3. Se o horário do cron (09:00 UTC = 06:00 em Brasília) cai mesmo antes do
-   horário da rotina.
+1. Configurar o `location /dodf/` no nginx do VPS (bloco pronto em
+   `CONFIGURACAO.md` §4.6) e testar de fora:
+   `curl -sI "https://SEU-VPS/dodf/jornal/visualizar-pdf" | head -1` (um 4xx do
+   DODF já prova que o encaminhamento funciona).
+2. Definir `DODF_BASE_URL=https://SEU-VPS` nas env vars do ambiente de nuvem.
+3. Numa sessão interativa do ambiente, rodar `python scripts/coleta_dodf.py` e
+   confirmar o download dos PDFs do dia.
+4. Rodar a rotina completa e conferir a mensagem com leads das duas fontes.
 
 ---
 
@@ -215,21 +206,30 @@ GitHub, e não afeta o workflow do Actions — lá o push é feito pelo
 
 **Status:** aberta, descoberta em 12/08/2026 ao diagnosticar a §1.
 
-`www.in.gov.br` é uma das entradas acrescentadas à allowlist depois da criação
-do ambiente, e por isso está bloqueada (§1). Sem ela, `links_dou.py` não
-consegue ler o `urlTitle` do `leiturajornal` e cai no **link de página**
-(`link_tipo: "pagina"`) em vez do link direto da matéria. A rotina não quebra e
-a cliente recebe os leads — só com um link que exige garimpar a página.
+`www.in.gov.br` falha na nuvem com a mesma digital do DODF (§1): DNS resolve e
+a conexão cai — muito provavelmente o WAF do Serpro derrubando o IP da VM, não
+o proxy (a allowlist do ambiente recriado está comprovadamente funcionando).
+Sem esse host, `links_dou.py` não consegue ler o `urlTitle` do `leiturajornal`
+e cai no **link de página** (`link_tipo: "pagina"`) em vez do link direto da
+matéria. A rotina não quebra e a cliente recebe os leads — só com um link que
+exige garimpar a página.
 
 Não aparecia em lugar nenhum porque o fallback é silencioso por design. Para
 medir: `data/candidatos.json` traz `link_tipo` em cada candidato, e o
 `prefiltro.py` já imprime quantos saíram com link direto.
 
+**Antes de escolher a saída, confirmar a causa** (mesmo método da §1):
+
+- do VPS: `curl -sS -o /dev/null -w "%{http_code} em %{time_total}s\n" https://www.in.gov.br/` —
+  se responder, o VPS serve de relay também para este host;
+- da nuvem: `curl -v https://www.in.gov.br/ 2>&1 | tail -8` — reset após
+  `CONNECT ... 200` confirma firewall do destino.
+
 **Saídas, em ordem de preferência:**
 
-1. Recriar o ambiente com a allowlist completa desde a criação (resolve §1
-   inteira, incluindo esta e o Portal da Transparência da §2).
-2. Resolver os `urlTitle` no mesmo workflow do Actions que já coleta o DODF,
-   publicando um índice do dia na branch `dados/dodf` — mesmo padrão da §1,
-   mais código.
-3. Aceitar o link de página. É o estado atual.
+1. Segundo `location` no mesmo relay da §1 (ex.: `/leiturajornal` →
+   `www.in.gov.br`) + suporte a base configurável em `links_dou.py` — pequeno,
+   mesmo padrão do `DODF_BASE_URL`.
+2. Resolver os `urlTitle` no workflow do Actions quando a conta destravar,
+   publicando um índice do dia na branch `dados/dodf`.
+3. Aceitar o link de página. É o estado atual, e não bloqueia a entrega.
