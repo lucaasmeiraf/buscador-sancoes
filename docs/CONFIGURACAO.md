@@ -102,6 +102,9 @@ python scripts/coleta_inlabs.py     # baixa o DOU do dia -> data/raw/dou/
 python scripts/coleta_dodf.py       # baixa o DODF do dia -> data/raw/dodf/
 python scripts/prefiltro.py         # seleciona trechos -> data/candidatos.json
 
+# 3b. só o lado do GitHub Actions (o que o workflow publica na branch de dados)
+python scripts/prefiltro.py --fonte dodf --exportar data/dodf/$(date +%F)/blocos.json
+
 # 4. teste de envio
 python scripts/enviar_whatsapp.py --texto "teste do buscador de sanções"
 ```
@@ -193,28 +196,33 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
    caso o horário do trigger mude.
 
 3. **Rede**: o ambiente de nuvem passa por um proxy que bloqueia domínios fora da
-   lista padrão. Em **Network access → Custom → Allowed domains**, adicione:
+   lista padrão. Em **Network access → Custom → Allowed domains**, adicione
+   **todos de uma vez, na criação do ambiente** (ver o aviso abaixo):
    - `inlabs.in.gov.br` — download do DOU
-   - `www.in.gov.br` — **obrigatório**, não opcional: é de lá que
-     `scripts/links_dou.py` tira o link exato de cada matéria. Sem esse domínio a
-     rotina ainda funciona, mas cai para o link de página (menos preciso).
-   - `dodf.df.gov.br` — download do DODF (ver `docs/ISSUES.md` §1 se falhar)
+   - `www.in.gov.br` — é de lá que `scripts/links_dou.py` tira o link exato de
+     cada matéria. Sem esse domínio a rotina ainda funciona, mas cai para o link
+     de página (menos preciso — `docs/ISSUES.md` §8).
    - `api.portaldatransparencia.gov.br` — enriquecimento CEIS/CNEP (só se usar a chave)
    - o domínio do seu servidor Evolution API
 
-   > ⚠️ Escreva **só o hostname e o nome completo**: `dodf.df.gov.br` — o `df.`
-   > no meio faz parte do domínio. Não use `https://dodf.df.gov.br/`, nem
-   > `dodf.gov.br`/`dodf.gov` (não existem em DNS — foi exatamente esse o erro
-   > que bloqueou o DODF na nuvem, ver `docs/ISSUES.md` §1), nem
-   > `www.dodf.df.gov.br` (os scripts chamam o domínio sem `www`). Um caractere
-   > a mais ou a menos e o proxy bloqueia tudo, silenciosamente. Para conferir
-   > de dentro do ambiente:
+   `dodf.df.gov.br` **não** entra nessa lista: a rotina não baixa mais o DODF
+   direto (ver §4.6).
+
+   > ⚠️ **A allowlist só vale se for preenchida na criação do ambiente.**
+   > Domínios acrescentados depois continuam bloqueados: o ambiente roda com uma
+   > cópia congelada da configuração de rede. Foi o que travou o DODF e o
+   > `www.in.gov.br` por três dias — diagnóstico completo em `docs/ISSUES.md`
+   > §1. Se precisar de um host novo, **recrie o ambiente** com a lista completa
+   > em vez de editar a existente.
+   >
+   > Escreva **só o hostname e o nome completo**, sem `https://` e sem barra
+   > final. Para conferir de dentro do ambiente:
    >
    > ```bash
    > python scripts/diagnostico_rede.py
    > ```
    >
-   > Ele testa os três hosts e diz, para cada falha, se a causa é a allowlist, o
+   > Ele testa cada host e diz, para cada falha, se a causa é a allowlist, o
    > WAF do site ou instabilidade — cada uma com solução diferente.
 
 > ⚠️ **Sobre segredos**: hoje o Claude Code em nuvem **não tem cofre de segredos**
@@ -280,7 +288,48 @@ alguma fonte falhar, siga com a outra; detalhe técnico de falha vai só no
 alerta ao operador (enviar_whatsapp.py --admin), nunca na mensagem da cliente.
 ```
 
-### 4.6 Limites úteis de saber
+### 4.6 Coleta do DODF no GitHub Actions
+
+O DODF é coletado **fora** do ambiente da rotina, por
+`.github/workflows/coleta-dodf.yml`. Motivo em `docs/ISSUES.md` §1: o proxy do
+ambiente não alcança `dodf.df.gov.br` e não há entrada de allowlist que resolva
+num ambiente já criado. O Actions roda dentro do GitHub, sem esse proxy.
+
+Como funciona:
+
+1. Todo dia às 09:00 UTC (06:00 em Brasília) o workflow baixa a edição, extrai o
+   texto e roda a **seleção** do pré-filtro (o mesmo `config/dicionario.md`).
+2. Publica só os blocos selecionados — alguns KB — em
+   `data/dodf/<data>/blocos.json`, na branch **`dados/dodf`**. É uma branch
+   órfã: não tem o resto do repositório e guarda 60 dias de cache.
+3. O passo 1 do `SKILL.md` traz esses blocos com
+   `git fetch origin dados/dodf && git archive origin/dados/dodf | tar -x`. O
+   `prefiltro.py` os encontra em `data/dodf/` e aplica dedup e hash normalmente.
+
+O que precisa estar configurado no repositório:
+
+- **Settings → Actions → General → Workflow permissions: "Read and write
+  permissions"** — sem isso o push na branch `dados/dodf` falha. É a única
+  configuração manual necessária.
+- O cron precisa rodar **antes** do horário da rotina. Se mudar o horário da
+  rotina, ajuste o cron junto.
+
+Nada disso depende do 403 de push da rotina (`docs/ISSUES.md` §7): o workflow
+usa o `GITHUB_TOKEN` emitido pelo GitHub, que não passa pelo proxy do Claude.
+
+**Plano B (secret `DODF_BASE_URL`).** Se o WAF do GDF recusar o IP do runner,
+suba um relay em host próprio — por exemplo um `location /dodf/` no nginx do
+servidor da Evolution API encaminhando para `https://dodf.df.gov.br` — e defina
+o secret `DODF_BASE_URL` com a base do relay. O coletor passa a baixar por lá e
+continua gerando links com o endereço oficial do diário (é o link que vai para a
+cliente). Nenhuma outra mudança é necessária.
+
+**Diagnóstico quando o DODF sumir do resumo:** abra a aba Actions do
+repositório. Falha do workflow = coleta quebrada; sucesso com `blocos.json`
+vazio = houve diário e nada casou com o dicionário. O texto integral do dia fica
+como artifact da execução por 14 dias.
+
+### 4.7 Limites úteis de saber
 
 - Intervalo mínimo entre execuções: **1 hora** (irrelevante para rotina diária).
 - A execução pode começar alguns minutos após o horário agendado (é normal).

@@ -40,7 +40,11 @@ O agente só coleta destas fontes. Não navegar livremente pela web.
 - **Autenticação:** nenhuma (acesso público).
 - **Acesso:** o site expõe a edição do dia para download em PDF (e a listagem de
   arquivos por diretório de data). O script `coleta_dodf.py` monta a URL da edição
-  do dia; conferir/ajustar o endpoint na primeira execução real.
+  do dia.
+- **Onde a coleta roda:** no **GitHub Actions**, não na rotina — o ambiente de
+  nuvem não alcança este host (`docs/ISSUES.md` §1). O workflow publica os
+  blocos já selecionados na branch `dados/dodf`, e a rotina os lê de lá
+  (passo 1 do `SKILL.md`). Localmente o script roda normalmente.
 - **Seção de interesse:** Seção 3 principalmente (avisos, penalidades, extratos),
   mas o pré-filtro varre o texto completo da edição.
 - **Link público da publicação:** o próprio endpoint do PDF com âncora de página —

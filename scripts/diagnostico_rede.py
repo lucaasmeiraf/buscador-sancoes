@@ -30,8 +30,12 @@ import requests
 HOSTS = {
     "inlabs.in.gov.br": "download do DOU (XML)",
     "www.in.gov.br": "link exato da matéria no DOU",
-    "dodf.df.gov.br": "download do DODF (PDF)",
 }
+
+# `dodf.df.gov.br` saiu da lista: desde a issue §1 quem baixa o DODF é o GitHub
+# Actions, fora deste ambiente. Continua testável por argumento
+# (`python scripts/diagnostico_rede.py dodf.df.gov.br`), mas falhar aqui não é
+# mais problema da rotina.
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "

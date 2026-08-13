@@ -7,6 +7,8 @@ data/raw/
 data/candidatos.json
 data/leads_hoje.json
 data/resumo.txt
+# Blocos do DODF trazidos da branch `dados/dodf` — vivem lá, não na master.
+data/dodf/
 
 # Documento de escopo (briefing de trabalho, mantido fora do repositório)
 buscador_sancoes.docx

@@ -4,9 +4,16 @@
 Baixa os PDFs da edição do dia (íntegra + edições extras) e extrai o texto para
 data/raw/dodf/AAAA-MM-DD/.
 
+Onde roda: no **GitHub Actions** (`.github/workflows/coleta-dodf.yml`), não na
+rotina — o ambiente de nuvem do Claude não alcança `dodf.df.gov.br`
+(docs/ISSUES.md §1). Continua rodando local para teste.
+
 Uso:
     python scripts/coleta_dodf.py             # edição de hoje
     python scripts/coleta_dodf.py 2026-08-05  # data específica (AAAA-MM-DD)
+
+Saída (exit code): 0 = baixou; 2 = não há edição para o dia (fim de semana,
+feriado — não é erro); 1 = falha de verdade.
 
 Endpoints (verificados em 2026-08-06):
     POST {BASE}/dodf/jornal/diario  com data=<epoch da meia-noite em Brasília>
@@ -18,18 +25,27 @@ Dependência de extração de texto: pypdf (pip install pypdf).
 """
 
 import json
+import os
 import re
 import sys
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
 
 import diagnostico_rede
 
-BASE_URL = "https://dodf.df.gov.br"
-HOST = "dodf.df.gov.br"
+# Endereço público do diário. É o que vale nos links entregues à cliente, mesmo
+# quando a coleta passa por outro caminho.
+SITE_OFICIAL = "https://dodf.df.gov.br"
+
+# De onde baixar. `DODF_BASE_URL` existe para o plano B da issue §1: se o site
+# recusar o IP do runner do GitHub, aponta-se para um relay em host já liberado
+# (ex.: o servidor da Evolution API) sem tocar no código. Vazio = site oficial.
+BASE_URL = (os.environ.get("DODF_BASE_URL") or SITE_OFICIAL).rstrip("/")
+HOST = urlparse(BASE_URL).hostname or "dodf.df.gov.br"
 DESTINO = Path(__file__).resolve().parent.parent / "data" / "raw" / "dodf"
 
 # Brasília é UTC-3 fixo (sem horário de verão desde 2019). A API do site indexa
@@ -44,7 +60,9 @@ HEADERS = {
         "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "pt-BR,pt;q=0.9",
-    "Referer": f"{BASE_URL}/",
+    # Referer do site oficial mesmo quando a coleta vai por relay: é o que o WAF
+    # do GDF espera ver, e o hostname do relay ali só daria motivo para recusa.
+    "Referer": f"{SITE_OFICIAL}/",
     # Exigido pela API do diário; inofensivo nos GETs de PDF.
     "X-Requested-With": "XMLHttpRequest",
 }
@@ -133,7 +151,9 @@ def baixar_dia(dia: date) -> Path | None:
         baixados.append({
             "arquivo": nome,
             "edicao": numero.group(1) if numero else None,
-            "url": r.url,
+            # Sempre o endereço oficial: `r.url` apontaria para o relay quando
+            # DODF_BASE_URL estiver em uso, e esse link vai para a cliente.
+            "url": r.url.replace(BASE_URL, SITE_OFICIAL, 1),
         })
 
     # Metadados que o prefiltro precisa para montar o link — o nome do arquivo
@@ -157,7 +177,9 @@ def _extrair_texto(pdf: Path) -> None:
 
 def main() -> int:
     dia = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today()
-    return 0 if baixar_dia(dia) else 1
+    # 2 (e não 1) quando não há edição: o workflow precisa separar "dia sem
+    # diário", que é normal e deve publicar lista vazia, de "coleta quebrou".
+    return 0 if baixar_dia(dia) else 2
 
 
 if __name__ == "__main__":

@@ -26,14 +26,23 @@ na etapa de extração, recebendo trechos já selecionados — nunca o diário i
 ## 1. Coleta (determinística)
 
 ```bash
-python scripts/coleta_inlabs.py   # baixa XML do DOU do dia em data/raw/dou/
-python scripts/coleta_dodf.py     # baixa a edição do dia do DODF em data/raw/dodf/
+python scripts/coleta_inlabs.py                      # XML do DOU em data/raw/dou/
+git fetch origin dados/dodf && git archive origin/dados/dodf | tar -x
 ```
 
-- Se uma fonte falhar (site fora do ar, login inválido, acesso bloqueado),
-  **continue com a outra**. O motivo diagnosticado que o coletor devolve vai
-  **inteiro e sem reinterpretar** para o alerta técnico (passo 6); na mensagem
-  da cliente entra no máximo uma linha neutra (ver passo 5).
+- **O DODF não é baixado aqui.** Este ambiente não alcança `dodf.df.gov.br`
+  (`docs/ISSUES.md` §1); quem coleta é o GitHub Actions
+  (`.github/workflows/coleta-dodf.yml`), que publica os blocos já selecionados
+  na branch `dados/dodf`. O `git archive` acima os traz para `data/dodf/<data>/`.
+  Não rode `scripts/coleta_dodf.py` — ele vai falhar.
+- Se o `fetch` falhar, ou se não houver `data/dodf/<hoje>/blocos.json`, **siga
+  só com o DOU** e mande o fato no alerta técnico do passo 6 (o Actions não
+  rodou, falhou, ou rodou depois desta run). Arquivo presente com lista vazia é
+  outra coisa: significa que o DODF foi conferido e nada casou — não é falha e
+  não vira alerta.
+- Se o INLABS falhar, **continue com o DODF**. O motivo diagnosticado que o
+  coletor devolve vai **inteiro e sem reinterpretar** para o alerta técnico
+  (passo 6); na mensagem da cliente entra no máximo uma linha neutra (passo 5).
 
 ## 2. Pré-filtro por seleção (determinístico)
 

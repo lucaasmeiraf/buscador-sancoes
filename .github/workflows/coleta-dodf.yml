@@ -1,0 +1,133 @@
+# Coleta do DODF fora do sandbox da rotina.
+#
+# Por quê: o ambiente de nuvem do Claude Routines não alcança `dodf.df.gov.br` —
+# o proxy só honra os domínios cadastrados na criação do ambiente, e edições
+# posteriores da allowlist não têm efeito (docs/ISSUES.md §1). O GitHub Actions
+# roda dentro do GitHub, sem esse proxy e sem allowlist, e publica o resultado
+# na branch `dados/dodf`. A rotina lê essa branch com `git fetch`, que é o canal
+# que comprovadamente funciona de lá (o clone de toda run passa por ele).
+#
+# O que trafega: só os blocos já selecionados pelo dicionário (alguns KB/dia).
+# O PDF e o texto integral ficam como artifact desta execução, para auditoria.
+
+name: Coleta DODF
+
+on:
+  schedule:
+    # 09:00 UTC = 06:00 em Brasília. Precisa ser antes do horário da rotina.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      data:
+        description: "Data AAAA-MM-DD (vazio = hoje em Brasília)"
+        required: false
+        type: string
+
+# Necessário para o push na branch de dados. Se o repositório estiver em
+# Settings → Actions → General → Workflow permissions = read-only, esta linha
+# não basta: o botão precisa estar em "Read and write permissions".
+permissions:
+  contents: write
+
+# Sem isso o runner roda em UTC e, depois das 21h de Brasília, pediria o diário
+# do dia seguinte — a mesma pegadinha documentada em CONFIGURACAO.md §4.3.
+env:
+  TZ: America/Sao_Paulo
+
+# Duas execuções simultâneas empurrariam commits concorrentes na mesma branch.
+concurrency:
+  group: coleta-dodf
+  cancel-in-progress: false
+
+jobs:
+  coletar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Data de referência
+        id: ref
+        run: |
+          DATA="${{ inputs.data }}"
+          [ -n "$DATA" ] || DATA=$(date +%F)
+          echo "data=$DATA" >> "$GITHUB_OUTPUT"
+          echo "Coletando o DODF de $DATA."
+
+      - name: Baixar a edição e selecionar os trechos
+        env:
+          # Plano B da issue §1: se o WAF do GDF recusar o IP do runner, defina
+          # este secret apontando para um relay em host próprio. Vazio = site
+          # oficial.
+          DODF_BASE_URL: ${{ secrets.DODF_BASE_URL }}
+        run: |
+          DATA="${{ steps.ref.outputs.data }}"
+          set +e
+          python scripts/coleta_dodf.py "$DATA"
+          rc=$?
+          set -e
+          # 2 = não há edição para o dia (fim de semana, feriado). Segue e
+          # publica lista vazia: é a diferença entre "checado, nada" e "não
+          # checado", e a rotina precisa saber qual dos dois foi.
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 2 ]; then
+            echo "::error::coleta do DODF falhou (exit $rc)"
+            exit 1
+          fi
+          python scripts/prefiltro.py "$DATA" --fonte dodf \
+            --exportar "data/dodf/$DATA/blocos.json"
+
+      - name: Guardar o texto integral para auditoria
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dodf-${{ steps.ref.outputs.data }}
+          # Só o texto extraído e os metadados: o PDF é público e sempre pode
+          # ser rebaixado pelo link do próprio lead.
+          path: |
+            data/raw/dodf/**/*.txt
+            data/raw/dodf/**/_edicao.json
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Publicar na branch dados/dodf
+        run: |
+          DATA="${{ steps.ref.outputs.data }}"
+          ARQ="data/dodf/$DATA/blocos.json"
+          test -f "$ARQ"
+          # A branch de dados não tem o resto do repositório, então o arquivo
+          # precisa sobreviver à troca de branch fora da árvore de trabalho.
+          cp "$ARQ" "$RUNNER_TEMP/blocos.json"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code origin dados/dodf >/dev/null 2>&1; then
+            git fetch origin dados/dodf
+            git checkout -B dados/dodf origin/dados/dodf
+          else
+            # Primeira execução: branch órfã, sem herdar a história da master.
+            git checkout --orphan dados/dodf
+            git rm -rf --cached . >/dev/null
+          fi
+
+          mkdir -p "data/dodf/$DATA"
+          cp "$RUNNER_TEMP/blocos.json" "$ARQ"
+          git add -f "$ARQ"
+
+          # A branch é cache, não histórico: o que passou de 60 dias já foi
+          # processado pela rotina e vive em data/leads.csv.
+          ls data/dodf | sort | head -n -60 | while read -r velho; do
+            git rm -rq "data/dodf/$velho" || true
+          done
+
+          if git diff --cached --quiet; then
+            echo "Nada mudou — nenhum commit."
+            exit 0
+          fi
+          git commit -qm "dados: DODF $DATA"
+          git push origin dados/dodf

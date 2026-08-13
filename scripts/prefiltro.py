@@ -13,18 +13,24 @@ Localização da publicação (link/página/edição) também NÃO é tarefa do 
 montada aqui, a partir dos metadados oficiais de cada fonte, e viaja com o
 trecho até a mensagem final. Ver `links_dou.py` e a nota sobre página no DODF.
 
+O DODF tem duas origens possíveis, nesta ordem: o texto baixado localmente
+(`data/raw/dodf/`) e, se não houver, os blocos já selecionados fora do sandbox
+pelo GitHub Actions (`data/dodf/`, trazidos da branch `dados/dodf` — ver
+docs/ISSUES.md §1). O modo `--exportar` é o lado do Actions dessa troca.
+
 Saída: data/candidatos.json — lista de trechos com fonte, link e hash (dedup).
 Estado: data/vistos.json — hashes já processados em execuções anteriores.
 
 Uso:
     python scripts/prefiltro.py             # varre data/raw/*/HOJE
     python scripts/prefiltro.py 2026-08-05  # data específica
+    python scripts/prefiltro.py 2026-08-05 --fonte dodf --exportar <arquivo>
 """
 
+import argparse
 import hashlib
 import json
 import re
-import sys
 import unicodedata
 from datetime import date
 from pathlib import Path
@@ -37,6 +43,8 @@ DICIONARIO = RAIZ / "config" / "dicionario.md"
 DADOS = RAIZ / "data"
 CANDIDATOS = DADOS / "candidatos.json"
 VISTOS = DADOS / "vistos.json"
+# Blocos do DODF selecionados fora do sandbox (branch `dados/dodf`).
+DODF_EXTERNO = DADOS / "dodf"
 
 
 # ---------------------------------------------------------------- dicionário
@@ -153,6 +161,32 @@ def _pagina_impressa(pagina_texto: str, indice: int) -> int:
 
 
 def blocos_dodf(dia_str: str):
+    """Blocos do DODF, do texto local ou do que o Actions já selecionou.
+
+    A rotina na nuvem não alcança o site (docs/ISSUES.md §1), então lá só existe
+    o caminho externo; local e no runner do Actions só existe o primeiro.
+    """
+    if (DADOS / "raw" / "dodf" / dia_str).exists():
+        yield from blocos_dodf_local(dia_str)
+    else:
+        yield from blocos_dodf_externos(dia_str)
+
+
+def blocos_dodf_externos(dia_str: str):
+    """Blocos vindos da branch `dados/dodf` (já selecionados pelo Actions).
+
+    Ausência do arquivo significa "o DODF não foi coletado hoje" — a rotina
+    segue com o DOU e avisa o operador (passo 1 do SKILL.md). Lista vazia é
+    diferente: quer dizer que houve coleta e nada casou com o dicionário.
+    """
+    arquivo = DODF_EXTERNO / dia_str / "blocos.json"
+    if not arquivo.exists():
+        print(f"[prefiltro] sem blocos do DODF em {arquivo} — seguindo só com o DOU.")
+        return
+    yield from json.loads(arquivo.read_text(encoding="utf-8"))
+
+
+def blocos_dodf_local(dia_str: str):
     """Itera blocos do texto extraído do DODF (uma página do PDF por bloco)."""
     pasta = DADOS / "raw" / "dodf" / dia_str
     meta = {}
@@ -188,22 +222,63 @@ def blocos_dodf(dia_str: str):
 
 # ---------------------------------------------------------------- pipeline
 
+def _selecionar(bloco: dict, redes: dict) -> tuple[str, list[str], list[str]] | None:
+    """Aplica o critério de seleção a um bloco: 1 termo de cada rede.
+
+    Devolve (texto normalizado, termos de sanção, termos de rodovia) ou None.
+    Para afrouxar (só sanção), troque a condição por `if not hits_sancao`.
+    """
+    texto_norm = _normalizar(re.sub(r"\s+", " ", bloco["texto"]))
+    hits_sancao = _casa(texto_norm, redes["sancao"])
+    hits_rodovia = _casa(texto_norm, redes["rodovia"])
+    if not (hits_sancao and hits_rodovia):
+        return None
+    return texto_norm, hits_sancao, hits_rodovia
+
+
+def exportar_dodf(dia_str: str, destino: Path) -> int:
+    """Grava os blocos do DODF que passam na seleção — lado Actions da troca.
+
+    Sem hash e sem dedup de propósito: `data/vistos.json` é estado da rotina, e
+    o runner do Actions vê uma cópia que pode estar desatualizada. A dedup
+    acontece uma vez só, na rotina, quando estes blocos são reprocessados.
+    """
+    redes = carregar_dicionario()
+    selecionados = [b for b in blocos_dodf_local(dia_str) if _selecionar(b, redes)]
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    destino.write_text(
+        json.dumps(selecionados, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(f"[prefiltro] {len(selecionados)} blocos do DODF de {dia_str} -> {destino}")
+    return 0
+
+
 def main() -> int:
-    dia = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("data", nargs="?", help="AAAA-MM-DD (padrão: hoje)")
+    parser.add_argument("--fonte", choices=["todas", "dodf"], default="todas",
+                        help="'dodf' só faz sentido com --exportar")
+    parser.add_argument("--exportar", type=Path, metavar="ARQUIVO",
+                        help="grava os blocos selecionados do DODF e sai")
+    args = parser.parse_args()
+
+    dia = date.fromisoformat(args.data) if args.data else date.today()
     dia_str = dia.strftime("%Y-%m-%d")
+
+    if args.exportar:
+        if args.fonte != "dodf":
+            parser.error("--exportar exige --fonte dodf")
+        return exportar_dodf(dia_str, args.exportar)
 
     redes = carregar_dicionario()
     vistos: list[str] = json.loads(VISTOS.read_text(encoding="utf-8")) if VISTOS.exists() else []
     candidatos, descartados_dedup = [], 0
 
     for bloco in list(blocos_dou(dia, dia_str)) + list(blocos_dodf(dia_str)):
-        texto_norm = _normalizar(re.sub(r"\s+", " ", bloco["texto"]))
-        hits_sancao = _casa(texto_norm, redes["sancao"])
-        hits_rodovia = _casa(texto_norm, redes["rodovia"])
-        # Critério de seleção: 1 termo de cada rede. Para afrouxar (só sanção),
-        # troque a linha abaixo por: if not hits_sancao: continue
-        if not (hits_sancao and hits_rodovia):
+        selecao = _selecionar(bloco, redes)
+        if selecao is None:
             continue
+        texto_norm, hits_sancao, hits_rodovia = selecao
 
         h = hashlib.sha256(texto_norm.encode("utf-8")).hexdigest()
         if h in vistos:

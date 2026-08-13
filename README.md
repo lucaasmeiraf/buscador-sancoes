@@ -60,7 +60,8 @@ Como criar a rotina, configurar o ambiente e agendar: **[docs/CONFIGURACAO.md](d
 | `config/fontes.md` | Fontes fixas (DOU/INLABS, DODF) e como acessá-las. |
 | `config/dicionario.md` | Rede de palavras-chave do pré-filtro (ampla, editável). |
 | `scripts/coleta_inlabs.py` | Baixa as edições XML do DOU via INLABS. |
-| `scripts/coleta_dodf.py` | Baixa a edição do dia do DODF. |
+| `scripts/coleta_dodf.py` | Baixa a edição do dia do DODF (roda no GitHub Actions, não na rotina). |
+| `.github/workflows/coleta-dodf.yml` | Coleta diária do DODF fora do ambiente da rotina, publicada na branch `dados/dodf`. |
 | `scripts/diagnostico_rede.py` | Testa o acesso às fontes e classifica a falha (allowlist / WAF / instabilidade). |
 | `scripts/links_dou.py` | Resolve o link exato da matéria no DOU (página conferida). |
 | `scripts/prefiltro.py` | Seleciona trechos candidatos por palavras-chave + dedup por hash. |
