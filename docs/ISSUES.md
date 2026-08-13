@@ -25,6 +25,14 @@ morria depois, no firewall do GDF — §1) e agora nem abre.
 `IN_GOV_BASE_URL`. O VPS alcança as três (medido em 13/08: INLABS 302,
 `www.in.gov.br` 301, DODF 202) e o proxy libera o host do relay.
 
+**Validação do relay (madrugada de 13/08/2026):** `/dodf/` com coleta completa
+comprovada; `/ingov/` devolvendo o índice real do dia (200, 138KB, com
+`urlTitle`); `/inlabs/` entregando os cookies do WAF idênticos ao acesso
+direto. O POST de login não pôde ser confirmado porque o INLABS estava **em
+manutenção no horário do teste** — falha idêntica com e sem relay, ou seja,
+não é o relay (é a intermitência da §5, coberta pelo retry do coletor).
+Confirmar na primeira execução de manhã.
+
 **Vale reportar ao suporte da Anthropic:** se for política nova, é bom saber;
 se for regressão, tende a voltar sozinha. De qualquer forma o relay já não
 depende disso.
