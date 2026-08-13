@@ -14,3 +14,6 @@ Regras permanentes:
 - Palavras-chave selecionam trechos; a extração de campos é sempre do LLM
   (nunca regex).
 - Não construir nem tocar em nada relacionado ao ISS (projeto futuro, fora de escopo).
+- Em execução da rotina: **nunca** alterar ou commitar código/prompts/docs —
+  os únicos arquivos commitados são `data/vistos.json` e `data/leads.csv`,
+  sempre por whitelist (`git add` nomeando os dois), nunca `git add -A`.

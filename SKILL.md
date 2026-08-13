@@ -218,10 +218,19 @@ advogada preenche à mão na planilha.
      Nunca termine a run silenciosamente nesse caso — e nunca mande esse
      aviso para a cliente (`WHATSAPP_DESTINO`).
 
-- Não commite nada de `data/raw/`, nem `data/candidatos.json`, nem `data/leads_hoje.json`.
+- O commit do estado é **whitelist, nunca varredura**: sempre
+  `git add data/vistos.json data/leads.csv` — **jamais** `git add -A`,
+  `git add .` ou `git commit -a`. Se `git status` mostrar qualquer outro
+  arquivo modificado (código, docs, prompts), **não o inclua**: descarte a
+  alteração e relate no alerta técnico do passo 6. A rotina não tem mandato
+  para alterar a si mesma.
 
 ## Regras permanentes
 
+- **A rotina nunca altera nem commita código, prompts, docs ou configuração.**
+  Os únicos arquivos que ela commita são `data/vistos.json` e `data/leads.csv`
+  (passo 8). Encontrou um bug? Relate no alerta técnico ao operador — não
+  conserte.
 - Nunca escreva segredos em arquivos ou logs.
 - Nunca use regex para extrair campos — regex/palavra-chave é só para **selecionar**.
 - Não navegue livremente pela web: use apenas as fontes de `config/fontes.md`.
