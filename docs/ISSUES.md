@@ -63,7 +63,24 @@ de infraestrutura própria:
 branch, e a mecânica git de ponta a ponta num remoto de teste (branch órfã,
 clone limpo, extração sem sujar o índice).
 
-**O que falta confirmar na primeira execução do workflow:**
+**Bloqueio novo (12/08/2026): a conta GitHub está com trava de cobrança.** A
+primeira execução manual do workflow foi recusada com *"account is locked due
+to a billing issue"*. Não é custo do workflow — o volume aqui (~3 min/dia,
+~90 min/mês) cabe folgado nos 2.000 min/mês do plano gratuito para repositório
+privado. É uma pendência da própria conta (cartão/fatura/spending limit) que
+trava **todos** os Actions enquanto existir. Resolver em
+<https://github.com/settings/billing>; o workflow fica pronto esperando.
+
+**Por causa disso, o passo 1 do `SKILL.md` virou um funil com dois caminhos
+(12/08/2026):** a rotina tenta `coleta_dodf.py` direto (funciona em ambiente
+recriado com a allowlist completa, ou via relay `DODF_BASE_URL`) e, se falhar,
+cai para a branch `dados/dodf` do Actions. Alerta técnico só se **os dois**
+falharem. Assim, qualquer uma das três portas que abrir primeiro — cobrança do
+GitHub resolvida, ambiente recriado, ou relay no ar — reativa o DODF sem novo
+deploy.
+
+**O que falta confirmar na primeira execução real do workflow (quando a conta
+destravar):**
 
 1. Se o WAF do GDF aceita o IP do runner do GitHub (Azure). Sintoma de recusa
    seria 403/503 vindo do site — diferente do bloqueio de proxy. Se acontecer,

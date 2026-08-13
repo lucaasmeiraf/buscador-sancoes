@@ -27,17 +27,23 @@ na etapa de extração, recebendo trechos já selecionados — nunca o diário i
 
 ```bash
 python scripts/coleta_inlabs.py                      # XML do DOU em data/raw/dou/
-git fetch origin dados/dodf && git archive origin/dados/dodf | tar -x
+python scripts/coleta_dodf.py \
+  || (git fetch origin dados/dodf && git archive origin/dados/dodf | tar -x)
 ```
 
-- **O DODF não é baixado aqui.** Este ambiente não alcança `dodf.df.gov.br`
-  (`docs/ISSUES.md` §1); quem coleta é o GitHub Actions
-  (`.github/workflows/coleta-dodf.yml`), que publica os blocos já selecionados
-  na branch `dados/dodf`. O `git archive` acima os traz para `data/dodf/<data>/`.
-  Não rode `scripts/coleta_dodf.py` — ele vai falhar.
-- Se o `fetch` falhar, ou se não houver `data/dodf/<hoje>/blocos.json`, **siga
-  só com o DOU** e mande o fato no alerta técnico do passo 6 (o Actions não
-  rodou, falhou, ou rodou depois desta run). Arquivo presente com lista vazia é
+- **O DODF tem dois caminhos, nesta ordem** (`docs/ISSUES.md` §1):
+  1. **Direto** (`coleta_dodf.py`) — funciona se o ambiente alcançar
+     `dodf.df.gov.br` (ambiente recriado com a allowlist completa) ou se
+     `DODF_BASE_URL` apontar para um relay em host liberado. Em ambiente com o
+     host bloqueado, falha em segundos com o motivo diagnosticado — é esperado,
+     não é anomalia.
+  2. **Branch `dados/dodf`** (o `git fetch` + `git archive` acima) — blocos já
+     selecionados que o GitHub Actions (`.github/workflows/coleta-dodf.yml`)
+     publica; caem em `data/dodf/<data>/`. O `prefiltro.py` usa o que existir,
+     preferindo o texto baixado direto.
+- Se **nenhum** dos dois caminhos entregar o DODF de hoje (coleta direta falhou
+  E não há `data/dodf/<hoje>/blocos.json`), **siga só com o DOU** e mande os
+  dois motivos no alerta técnico do passo 6. Arquivo presente com lista vazia é
   outra coisa: significa que o DODF foi conferido e nada casou — não é falha e
   não vira alerta.
 - Se o INLABS falhar, **continue com o DODF**. O motivo diagnosticado que o

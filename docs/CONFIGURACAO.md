@@ -205,8 +205,10 @@ As variáveis da seção 2 vão no **cloud environment** usado pela rotina:
    - `api.portaldatransparencia.gov.br` — enriquecimento CEIS/CNEP (só se usar a chave)
    - o domínio do seu servidor Evolution API
 
-   `dodf.df.gov.br` **não** entra nessa lista: a rotina não baixa mais o DODF
-   direto (ver §4.6).
+   - `dodf.df.gov.br` — **inclua ao criar um ambiente novo**: com ele presente
+     desde a criação, a rotina volta a baixar o DODF direto e o caminho via
+     GitHub Actions (§4.6) vira reserva. Num ambiente antigo a entrada não tem
+     efeito (é o problema da §1 do ISSUES) e a rotina cai no fallback sozinha.
 
    > ⚠️ **A allowlist só vale se for preenchida na criação do ambiente.**
    > Domínios acrescentados depois continuam bloqueados: o ambiente roda com uma
