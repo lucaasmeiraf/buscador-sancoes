@@ -104,6 +104,14 @@ def testar(host: str) -> dict:
         return {"host": host, "ok": True, "ip": ip,
                 "motivo": f"OK ({resp.status_code}, {len(resp.content)} bytes)"}
     except requests.RequestException as erro:
+        status = getattr(getattr(erro, "response", None), "status_code", None)
+        if status == 404:
+            # O teste é de REDE, e um 404 prova que a rede funcionou: túnel,
+            # TLS e HTTP chegaram ao servidor. É a resposta esperada na raiz
+            # do relay do DODF, que só serve os caminhos configurados.
+            return {"host": host, "ok": True, "ip": ip,
+                    "motivo": "OK (host alcançado; 404 na raiz é o esperado "
+                              "num relay, que só serve os caminhos configurados)"}
         return {"host": host, "ok": False, "ip": ip, "motivo": explicar(host, erro)}
 
 
