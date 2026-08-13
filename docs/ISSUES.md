@@ -7,8 +7,12 @@ Pendências conhecidas da automação. Atualizado em 12/08/2026.
 ## 1. O firewall do GDF derruba conexões vindas da VM da nuvem
 
 **Status:** causa raiz identificada em 12/08/2026 (a terceira e definitiva).
-Solução escolhida: **relay no servidor da Evolution API** via `DODF_BASE_URL` —
-falta configurar o nginx e validar uma coleta pela nuvem.
+Relay **no ar e validado de fora** (12/08 à noite: edição 148 + extra baixadas
+de uma máquina local passando pelo relay) — falta só a coleta **pela nuvem**.
+A primeira tentativa falhou com `ProxyError: Tunnel connection failed: 403`,
+que é assinatura de allowlist: o host do relay não estava valendo na sessão
+(entrada ausente ou sessão aberta antes de salvar). Conferir a entrada, salvar,
+abrir sessão nova e repetir — tabela de sintomas em `CONFIGURACAO.md` §4.6.
 
 **Causa raiz (12/08/2026, curl -v de dentro do ambiente recriado):**
 
@@ -74,13 +78,14 @@ e, se falhar, cai para a branch `dados/dodf` do Actions. Alerta técnico só se
 
 **Para fechar esta issue:**
 
-1. Configurar o `location /dodf/` no nginx do VPS (bloco pronto em
-   `CONFIGURACAO.md` §4.6) e testar de fora:
-   `curl -sI "https://SEU-VPS/dodf/jornal/visualizar-pdf" | head -1` (um 4xx do
-   DODF já prova que o encaminhamento funciona).
-2. Definir `DODF_BASE_URL=https://SEU-VPS` nas env vars do ambiente de nuvem.
-3. Numa sessão interativa do ambiente, rodar `python scripts/coleta_dodf.py` e
-   confirmar o download dos PDFs do dia.
+1. ~~Configurar o relay no VPS~~ — feito em 12/08/2026 (serviço `dodf-relay`
+   no EasyPanel; passo a passo em `CONFIGURACAO.md` §4.6) e validado de fora:
+   coleta completa da edição do dia atravessando o relay.
+2. Allowlist do ambiente com o host do relay + `DODF_BASE_URL` nas env vars,
+   salvos **antes** de abrir a sessão de teste (o primeiro teste falhou por
+   isso — `ProxyError` = proxy do Claude, não o GDF).
+3. Numa sessão interativa **nova** do ambiente: `git pull origin master` e
+   `python scripts/coleta_dodf.py` — confirmar o download dos PDFs do dia.
 4. Rodar a rotina completa e conferir a mensagem com leads das duas fontes.
 
 ---

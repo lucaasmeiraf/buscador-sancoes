@@ -322,33 +322,78 @@ O que precisa estar configurado no repositório:
 Nada disso depende do 403 de push da rotina (`docs/ISSUES.md` §7): o workflow
 usa o `GITHUB_TOKEN` emitido pelo GitHub, que não passa pelo proxy do Claude.
 
-**Relay no VPS da Evolution API (caminho principal desde 12/08/2026).** O
-firewall do GDF derruba conexões vindas da VM da nuvem, mas aceita o VPS
-(`docs/ISSUES.md` §1) — e a nuvem alcança o VPS, que está na allowlist. O relay
-fecha o circuito. No nginx do VPS, dentro do bloco `server { listen 443 ssl; }`
-do domínio da Evolution:
+**Relay no VPS (caminho principal desde 12/08/2026).**
 
-```nginx
-# Relay do DODF — encaminha só /dodf/ para o diário oficial (não é proxy
-# aberto: o destino é fixo). Ver docs/ISSUES.md §1 do buscador-sancoes.
-location /dodf/ {
-    proxy_pass https://dodf.df.gov.br/dodf/;
-    proxy_set_header Host dodf.df.gov.br;
-    proxy_ssl_server_name on;
-    proxy_ssl_name dodf.df.gov.br;
-    proxy_read_timeout 300s;
-    proxy_buffering off;        # os PDFs têm dezenas de MB — stream direto
-}
-```
-
-Depois de recarregar (`nginx -t && nginx -s reload`), teste de qualquer
-máquina: `curl -sI "https://SEU-DOMINIO/dodf/jornal/visualizar-pdf" | head -1`
-— qualquer resposta HTTP do DODF (mesmo 4xx) prova que o encaminhamento
-funciona. Por fim, defina nas env vars do ambiente de nuvem:
+*Por que existe:* o firewall do GDF derruba a conexão TLS vinda do IP da VM da
+nuvem — o proxy do Claude libera o host, a conexão sai, e o **destino** corta
+com reset (diagnóstico completo, com as três hipóteses erradas pelo caminho, em
+`docs/ISSUES.md` §1). Nenhuma allowlist resolve isso, porque o bloqueio é do
+lado do governo. O mesmo VPS que roda a Evolution API, porém, **é aceito** pelo
+GDF — então um relay nele fecha o circuito:
 
 ```
-DODF_BASE_URL=https://SEU-DOMINIO
+rotina (nuvem) ──HTTPS──> Traefik (EasyPanel) ──> nginx dodf-relay ──HTTPS──> dodf.df.gov.br
 ```
+
+O VPS roda **EasyPanel**, então não se edita nginx por SSH: o relay é um
+serviço do painel. Passo a passo (validado em 12/08/2026):
+
+1. No projeto do EasyPanel: **+ Service → App**, nome `dodf-relay`.
+2. Em **Source**: imagem Docker `nginx:alpine`.
+3. Em **Mounts → Add Mount → File Mount**, Mount Path
+   `/etc/nginx/conf.d/default.conf`, com este conteúdo:
+
+   ```nginx
+   server {
+       listen 80;
+
+       # DNS embutido do Docker, resolvido em runtime. Com hostname fixo no
+       # proxy_pass o nginx resolve só no boot — se o DNS falhar nesse
+       # instante, o container entra em crash-loop e o Traefik devolve 502.
+       resolver 127.0.0.11 valid=300s ipv6=off;
+
+       # Encaminha só /dodf/ ao diário oficial. Destino fixo — não é proxy aberto.
+       location /dodf/ {
+           set $destino https://dodf.df.gov.br;
+           proxy_pass $destino$request_uri;      # preserva caminho + query
+           proxy_set_header Host dodf.df.gov.br;
+           proxy_ssl_server_name on;
+           proxy_ssl_name dodf.df.gov.br;
+           proxy_read_timeout 300s;
+           proxy_buffering off;                  # PDFs grandes: stream direto
+       }
+
+       location / { return 404; }
+   }
+   ```
+
+4. Em **Domains**: adicione um domínio com **Port 80** (o EasyPanel gera um
+   subdomínio `*.easypanel.host`; o Traefik cuida do HTTPS sozinho). Anote o
+   hostname — ele vai na allowlist e no `DODF_BASE_URL`. **Não recrie o
+   serviço à toa**: recriar pode trocar o subdomínio e quebrar os dois.
+5. **Deploy**, e teste de qualquer máquina:
+   - `curl -sI https://RELAY/` → **404** é o esperado (é o `location /` da
+     config — prova que o nginx subiu com ela);
+   - `curl -sI https://RELAY/dodf/jornal/visualizar-pdf` → **404 também é
+     sucesso**: é o DODF respondendo que o caminho sem parâmetros não existe —
+     a chamada atravessou até o GDF e voltou;
+   - prova definitiva:
+     `DODF_BASE_URL=https://RELAY python scripts/coleta_dodf.py` deve baixar
+     os PDFs do dia.
+6. No **ambiente de nuvem** (formulário de Update cloud environment), as duas
+   metades — e depois de salvar, **abra uma sessão nova** (sessões abertas
+   congelam a configuração de rede do momento em que iniciaram):
+   - Network access → Custom → Allowed domains: o hostname do relay;
+   - env vars: `DODF_BASE_URL=https://RELAY` (sem barra final).
+
+Falhas conhecidas e o que significam:
+
+| Sintoma | Causa | Ação |
+|---|---|---|
+| `502` em tudo, inclusive na raiz | nginx em crash-loop (DNS no boot) | conferir que a config é a acima (com `resolver`); logs do serviço no painel |
+| `200` com página de boas-vindas do nginx | File Mount não aplicou | conferir o Mount Path e re-deploy |
+| `404` na raiz | **normal** — assinatura da config | — |
+| `ProxyError: Tunnel connection failed: 403` na nuvem | allowlist sem o host do relay, ou sessão aberta antes de salvar | conferir a entrada, salvar, sessão nova |
 
 O coletor baixa pelo relay e **os links entregues à cliente continuam no site
 oficial** (`coleta_dodf.py` reescreve a URL). Sem `DODF_BASE_URL`, o coletor
