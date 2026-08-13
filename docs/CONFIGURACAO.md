@@ -244,13 +244,21 @@ scripts. No formulário do ambiente de nuvem, em **Setup script** (App Desktop:
 "Script de configuração"), coloque:
 
 ```bash
-python3 -m pip install --break-system-packages requests pypdf cryptography || python3 -m pip install requests pypdf cryptography
+python3 -m pip install --break-system-packages --upgrade requests pypdf cryptography || python3 -m pip install --upgrade requests pypdf cryptography
 ```
 
-O comando é uma linha só, de propósito: a versão com quebra de linha usava `\`
-(continuação de linha do bash), que não funciona se o comando for testado no
-PowerShell do Windows — o `\` vira argumento literal e o pip falha com
-"Directory '\\' is not installable".
+O comando é **uma linha só, e o setup script deve conter apenas ela** — apague
+linhas antigas ao editar. Dois acidentes já vistos com esse comando:
+
+- quebra de linha no meio (colagem que "enrolou" a linha): o resto do comando
+  vira linha própria e o shell tenta executá-lo — falha com
+  `requests: command not found` e exit 127 (visto em 13/08/2026);
+- a versão antiga com `\` de continuação, que no PowerShell vira argumento
+  literal e o pip falha com "Directory '\\' is not installable".
+
+O `--upgrade` não é opcional: sem ele o pip vê a cryptography quebrada do
+sistema como "already satisfied" e **não instala nada** (visto na mesma
+execução de 13/08/2026).
 
 As dependências (lista canônica em [`requirements.txt`](../requirements.txt)):
 `requests` (as três chamadas HTTP: INLABS, DODF, Evolution), `pypdf` (leitura
