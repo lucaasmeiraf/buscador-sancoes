@@ -174,13 +174,34 @@ def _neutralizar_cryptography_quebrada() -> None:
     pypdf vira ImportError e ele cai no provider puro-Python. Nada se perde —
     cryptography só serviria para PDF criptografado, e o DODF não é.
     """
+    import os
+    import sys
+
+    # O pânico do binding Rust escreve direto no fd 2 antes de virar exceção —
+    # sem o silenciador, o stderr ganha um "ModuleNotFoundError ... panicked"
+    # que parece falha e confunde quem lê o log (a extração segue normal).
+    quebrada = False
+    stderr_original = os.dup(2)
+    devnull = os.open(os.devnull, os.O_WRONLY)
     try:
-        import cryptography.hazmat.bindings._rust  # noqa: F401
-    except BaseException:  # PanicException herda de BaseException, não de Exception
-        import sys
-        for mod in [m for m in sys.modules if m.split(".")[0] == "cryptography"]:
-            del sys.modules[mod]
-        sys.modules["cryptography"] = None  # None => import levanta ImportError
+        os.dup2(devnull, 2)
+        try:
+            import cryptography.hazmat.bindings._rust  # noqa: F401
+        except BaseException:  # PanicException herda de BaseException
+            quebrada = True
+    finally:
+        os.dup2(stderr_original, 2)
+        os.close(devnull)
+        os.close(stderr_original)
+
+    if not quebrada:
+        return
+    for mod in [m for m in sys.modules if m.split(".")[0] == "cryptography"]:
+        del sys.modules[mod]
+    sys.modules["cryptography"] = None  # None => import levanta ImportError
+    print("[coleta_dodf] cryptography do sistema está quebrada — neutralizada; "
+          "o pypdf segue no fallback puro-Python (suficiente: o DODF não é "
+          "criptografado).")
 
 
 def _extrair_texto(pdf: Path) -> None:
