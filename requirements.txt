@@ -1,3 +1,7 @@
 # Dependências dos scripts de coleta/envio
 requests
 pypdf
+# A VM do ambiente de nuvem traz uma cryptography de sistema quebrada (binding
+# Rust sem _cffi_backend) que derruba o import do pypdf com PanicException.
+# Instalar via pip põe uma versão íntegra na frente no sys.path.
+cryptography

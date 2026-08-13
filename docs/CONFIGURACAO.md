@@ -244,7 +244,7 @@ scripts. No formulário do ambiente de nuvem, em **Setup script** (App Desktop:
 "Script de configuração"), coloque:
 
 ```bash
-python3 -m pip install --break-system-packages requests pypdf || python3 -m pip install requests pypdf
+python3 -m pip install --break-system-packages requests pypdf cryptography || python3 -m pip install requests pypdf cryptography
 ```
 
 O comando é uma linha só, de propósito: a versão com quebra de linha usava `\`
@@ -252,9 +252,13 @@ O comando é uma linha só, de propósito: a versão com quebra de linha usava `
 PowerShell do Windows — o `\` vira argumento literal e o pip falha com
 "Directory '\\' is not installable".
 
-São só duas dependências (a lista canônica está em
-[`requirements.txt`](../requirements.txt)): `requests` (as três chamadas HTTP:
-INLABS, DODF, Evolution) e `pypdf` (leitura do DODF quando a edição vem em PDF).
+As dependências (lista canônica em [`requirements.txt`](../requirements.txt)):
+`requests` (as três chamadas HTTP: INLABS, DODF, Evolution), `pypdf` (leitura
+do PDF do DODF) e `cryptography` — esta última não é usada diretamente: a
+imagem da VM traz uma `cryptography` de sistema **quebrada** (binding Rust sem
+`_cffi_backend`) que derruba o `import pypdf` com `PanicException` em vez de
+`ImportError` (visto em 12/08/2026). A versão do pip fica na frente no
+`sys.path` e neutraliza a do sistema.
 Todo o resto dos scripts é biblioteca padrão do Python. Os pacotes são nomeados
 direto no comando — e não via `-r requirements.txt` — porque o setup script roda
 num diretório de trabalho que não é a raiz do repositório, e o caminho relativo

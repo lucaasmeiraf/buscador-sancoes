@@ -81,11 +81,14 @@ e, se falhar, cai para a branch `dados/dodf` do Actions. Alerta técnico só se
 1. ~~Configurar o relay no VPS~~ — feito em 12/08/2026 (serviço `dodf-relay`
    no EasyPanel; passo a passo em `CONFIGURACAO.md` §4.6) e validado de fora:
    coleta completa da edição do dia atravessando o relay.
-2. Allowlist do ambiente com o host do relay + `DODF_BASE_URL` nas env vars,
-   salvos **antes** de abrir a sessão de teste (o primeiro teste falhou por
-   isso — `ProxyError` = proxy do Claude, não o GDF).
-3. Numa sessão interativa **nova** do ambiente: `git pull origin master` e
-   `python scripts/coleta_dodf.py` — confirmar o download dos PDFs do dia.
+2. ~~Allowlist do ambiente com o host do relay + `DODF_BASE_URL`~~ — feito;
+   confirmado em 12/08/2026 à noite: **a nuvem baixou o PDF do DODF pelo
+   relay**. A rede está fechada de ponta a ponta.
+3. Atualizar o **setup script** do ambiente para incluir `cryptography`
+   (§4.4 do guia): a imagem da VM traz uma cryptography de sistema quebrada
+   que derruba o `import pypdf` com `PanicException` na extração de texto —
+   foi a última falha vista. Na sessão, o paliativo é
+   `python3 -m pip install --break-system-packages --upgrade cryptography`.
 4. Rodar a rotina completa e conferir a mensagem com leads das duas fontes.
 
 ---
