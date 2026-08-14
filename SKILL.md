@@ -132,27 +132,54 @@ Para cada lead qualificado, monte o pacote:
 > defesa · fase processual · link da publicação
 
 Formato da mensagem: português claro, um bloco por lead, leads mais urgentes
-primeiro (prazo mais curto). Se não houver leads, abra com
-**"Sem novidades hoje — nenhuma sanção qualificada nos diários de <data>."**
-(o rodapé abaixo entra mesmo assim — é ele que mostra que a checagem
-aconteceu).
+primeiro (prazo mais curto). Se não houver leads, abra com o cabeçalho e a
+linha de "sem novidades" do modelo abaixo (o rodapé entra mesmo assim — é ele
+que mostra que a checagem aconteceu).
+
+**Formatação para WhatsApp (obrigatória).** A mensagem é lida no celular;
+parágrafo corrido vira um bloco ilegível. Regras:
+
+- `*negrito*` só para o título e os nomes de seção; `_itálico_` não é usado
+  (em bloco longo o `_` quebra e aparece literal).
+- **Um item por linha**, com marcador `•`. Nunca junte itens com ponto e
+  vírgula num parágrafo.
+- **Linha em branco entre seções.** Nunca quebre linha no meio de uma frase
+  para "caber em 80 colunas" — no WhatsApp cada `\n` do arquivo é uma quebra
+  real. Uma linha só termina onde o item termina.
 
 **Rodapé de transparência (sempre, inclusive em dia sem lead).** Feche a
-mensagem com um bloco curto montado a partir de `data/estatisticas.json`
-(contagens — nunca estime números) e dos registros do passo 4.6 (motivos):
+mensagem com dois blocos montados a partir de `data/estatisticas.json`
+(contagens — nunca estime números) e dos registros do passo 4.6 (motivos).
+Modelo de dia sem lead (com leads, os blocos dos leads entram entre o
+cabeçalho e o rodapé):
 
-> _Verificação de hoje: N publicações do DOU (seções 1 e 3) e as M páginas do
-> DODF (edição E). X trechos mencionavam sanção ou penalidade; L viraram
-> leads. Não viraram: Empresa A (multa de R$ 45 mil, abaixo do corte de
-> R$ 200 mil); Empresa B (obra de saneamento, fora do escopo rodoviário).
-> Os demais Z trechos não traziam sanção com multa a empresa._
+> \*Buscador de Sanções\* — 13/08/2026
+>
+> Sem novidades hoje: nenhuma sanção qualificada nos diários verificados
+> (DOU e DODF).
+>
+> \*Verificação de hoje\*
+> • 2.778 publicações do DOU (seções 1 e 3)
+> • 76 páginas do DODF (edição 149)
+> • 61 trechos mencionavam sanção ou penalidade; nenhum virou lead
+>
+> \*Casos analisados e descartados\*
+> • Empresa A — multa de R$ 45 mil, abaixo do corte de R$ 200 mil
+> • Empresa B — obra de saneamento, fora do escopo rodoviário
+> • Mais K casos — multa abaixo do corte
+> • Os demais Z trechos não traziam sanção com multa a empresa (editais,
+>   licitações, avisos)
+
+(No arquivo `data/resumo.txt` cada `•` é uma linha única, sem a quebra de
+72 colunas que este modelo tem por ser Markdown.)
 
 Regras do rodapé:
 
-- No máximo **8 empresas nomeadas**; passando disso, agrupe os excedentes por
-  motivo ("e mais K casos de multa abaixo do corte").
+- No máximo **8 empresas nomeadas**, cada uma na sua linha `• Empresa —
+  motivo`; passando disso, agrupe os excedentes por motivo em uma linha
+  ("• Mais K casos — multa abaixo do corte").
 - Se `estatisticas.json` disser `origem: "externa"` no DODF (sem contagem de
-  páginas), escreva só "e o DODF (edição E)".
+  páginas), a linha do DODF vira só "• DODF (edição E)".
 - Motivo é sempre **critério do escopo** (multa, valor, objeto) — nada de
   termo técnico.
 

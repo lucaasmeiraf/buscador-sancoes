@@ -114,10 +114,14 @@ para a mensagem e para a planilha.
 
 ## Tarefa 3 — Resumo para WhatsApp
 
-Monte UMA mensagem em português claro, pronta para envio:
+Monte UMA mensagem em português claro, pronta para envio. Formatação de
+WhatsApp: `*negrito*` só em título e nomes de seção, **um item por linha**
+com `•`, linha em branco entre blocos, e **nunca** quebre linha no meio de
+uma frase — no WhatsApp cada quebra do arquivo aparece de verdade (as regras
+completas estão no passo 5 do `SKILL.md`).
 
 ```
-🚨 Buscador de Sanções — <data de hoje>
+🚨 *Buscador de Sanções* — <data de hoje>
 
 <N> lead(s) qualificado(s):
 
@@ -142,12 +146,17 @@ Monte UMA mensagem em português claro, pronta para envio:
 `edicao`, `pagina` e `link` saem dos campos copiados na Tarefa 1 — reproduza-os
 exatamente como vieram.
 
-Se nenhum lead sobreviver à qualificação, a mensagem é apenas:
+Se nenhum lead sobreviver à qualificação, o corpo da mensagem é:
 
 ```
-Buscador de Sanções — <data>: sem novidades hoje. Nenhuma sanção qualificada
-nos diários verificados (DOU/DODF).
+*Buscador de Sanções* — <data>
+
+Sem novidades hoje: nenhuma sanção qualificada nos diários verificados (DOU e DODF).
 ```
+
+Em qualquer caso (com ou sem lead), a mensagem fecha com o **rodapé de
+transparência** — dois blocos, "Verificação de hoje" e "Casos analisados e
+descartados" — montado conforme o modelo do passo 5 do `SKILL.md`.
 
 Grave a mensagem final em `data/resumo.txt` e envie com
 `python scripts/enviar_whatsapp.py --arquivo data/resumo.txt`.
