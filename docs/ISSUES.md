@@ -29,9 +29,33 @@ morria depois, no firewall do GDF — §1) e agora nem abre.
 comprovada; `/ingov/` devolvendo o índice real do dia (200, 138KB, com
 `urlTitle`); `/inlabs/` entregando os cookies do WAF idênticos ao acesso
 direto. O POST de login não pôde ser confirmado porque o INLABS estava **em
-manutenção no horário do teste** — falha idêntica com e sem relay, ou seja,
-não é o relay (é a intermitência da §5, coberta pelo retry do coletor).
-Confirmar na primeira execução de manhã.
+manutenção no horário do teste**.
+
+**A confirmação de manhã (13/08) veio negativa:** o POST de login via
+`/inlabs/` do relay voltou **200 sem `inlabs_session_cookie`**, enquanto o
+acesso **direto** da nuvem funcionou (o `CONNECT 403` do proxy para
+`inlabs.in.gov.br` regrediu sozinho, como esperado acima) — a coleta do dia
+saiu com `INLABS_BASE_URL` vazia, à mão. Ou seja: credencial correta; o
+defeito é específico do login pelo relay.
+
+O que já se sabe do fluxo de login (medido em 13/08, acesso direto):
+`GET /logar.php` → 302 `Location: acessar.php`; `POST /logar.php` → 302
+`Location: index.php` + `Set-Cookie: inlabs_session_cookie; path=/`. Os
+`Location` relativos e o `path=/` são cobertos pela config do relay
+(`proxy_cookie_path` reescreve para `/inlabs/`; relativo resolve no cliente) —
+a config do §4.6 do `CONFIGURACAO.md` não tem furo óbvio. Hipótese mais forte:
+o WAF do Serpro (F5, cookies `TS*`) trata o POST vindo do IP do VPS/da pilha
+TLS do nginx diferente do GET, devolvendo a página de login (200) sem
+autenticar. **Como confirmar:** de qualquer máquina, rodar o fluxo contra
+`https://RELAY/inlabs` com `allow_redirects=False` e comparar o POST — se
+vier 200 (e não 302) sem `Set-Cookie` de sessão, o bloqueio é no destino, não
+na config do nginx.
+
+**Mitigação no coletor (13/08/2026):** `coleta_inlabs.py` agora tenta a
+`INLABS_BASE_URL` configurada e, se o login falhar lá (200 sem cookie ou rota
+inalcançável), **cai sozinho para o site oficial** — cobre tanto o defeito do
+relay quanto uma eventual volta do `CONNECT 403` do proxy, sem intervenção
+manual. `INLABS_BASE_URL` pode ficar definida no ambiente.
 
 **Vale reportar ao suporte da Anthropic:** se for política nova, é bom saber;
 se for regressão, tende a voltar sozinha. De qualquer forma o relay já não

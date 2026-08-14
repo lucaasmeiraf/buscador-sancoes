@@ -57,8 +57,8 @@ HEADERS = {
 TENTATIVAS = 5
 
 
-def _sessao_logada() -> requests.Session:
-    """Abre sessão autenticada no INLABS (cookie `inlabs_session_cookie`).
+def _login_em(base: str) -> requests.Session:
+    """Tenta o login numa base (site oficial ou relay), com retry para o 502.
 
     O 502 do WAF é intermitente — a mesma requisição alterna entre sucesso e
     falha em minutos. Por isso o retry com espera crescente: sem ele a rotina
@@ -72,16 +72,18 @@ def _sessao_logada() -> requests.Session:
         s = requests.Session()
         s.headers.update(HEADERS)
         try:
-            s.get(f"{BASE_URL}/logar.php", timeout=60)  # semeia PHPSESSID + cookies do WAF
-            resp = s.post(f"{BASE_URL}/logar.php",
+            s.get(f"{base}/logar.php", timeout=60)  # semeia PHPSESSID + cookies do WAF
+            resp = s.post(f"{base}/logar.php",
                           data={"email": login, "password": senha}, timeout=90)
             resp.raise_for_status()
             if "inlabs_session_cookie" in s.cookies:
                 return s
-            # 200 sem cookie = credencial recusada; insistir não adianta.
+            # 200 sem cookie: no site oficial é credencial recusada; via relay
+            # pode ser o relay degradando o fluxo de login (visto em 13/08/2026
+            # — a mesma credencial logava direto). Insistir na mesma base não
+            # adianta; quem decide o fallback é _sessao_logada().
             raise RuntimeError(
-                "Login INLABS não retornou cookie de sessão — conferir "
-                "INLABS_LOGIN/INLABS_SENHA."
+                f"login em {base} retornou 200 sem cookie de sessão"
             )
         except requests.HTTPError as erro:
             ultimo_erro = erro
@@ -93,9 +95,42 @@ def _sessao_logada() -> requests.Session:
     raise RuntimeError(f"INLABS indisponível após {TENTATIVAS} tentativas: {ultimo_erro}")
 
 
+def _sessao_logada() -> tuple[requests.Session, str]:
+    """Sessão autenticada + base que funcionou (downloads usam a mesma base).
+
+    Tenta a BASE_URL configurada (relay, se INLABS_BASE_URL estiver definida)
+    e, se o login falhar lá, cai para o site oficial. O fallback existe porque
+    em 13/08/2026 o POST de login via relay voltou 200 sem cookie enquanto o
+    acesso direto funcionava (docs/ISSUES.md §0) — e o inverso também já
+    ocorreu (proxy do ambiente recusando .gov.br). Tentar as duas bases cobre
+    os dois cenários; a base que não é alcançável falha rápido.
+    """
+    bases = [BASE_URL]
+    if BASE_URL != SITE_OFICIAL:
+        bases.append(SITE_OFICIAL)
+
+    erros: list[str] = []
+    for base in bases:
+        try:
+            s = _login_em(base)
+            if base != bases[0]:
+                print(f"[coleta_inlabs] login via {bases[0]} falhou; "
+                      f"seguindo pelo acesso direto ({base}).")
+            return s, base
+        except (RuntimeError, requests.RequestException) as erro:
+            erros.append(f"{base}: {erro}")
+
+    raise RuntimeError(
+        "Login INLABS falhou em todas as bases — se o motivo for '200 sem "
+        "cookie' nas duas, conferir INLABS_LOGIN/INLABS_SENHA; só numa delas, "
+        "o problema é a rota (relay ou proxy), não a credencial. Detalhes: "
+        + " | ".join(erros)
+    )
+
+
 def baixar_dia(dia: date) -> list[Path]:
     """Baixa e extrai os zips XML das seções configuradas. Retorna as pastas extraídas."""
-    s = _sessao_logada()
+    s, base = _sessao_logada()
     dia_str = dia.strftime("%Y-%m-%d")
     pasta_dia = DESTINO / dia_str
     pasta_dia.mkdir(parents=True, exist_ok=True)
@@ -104,7 +139,7 @@ def baixar_dia(dia: date) -> list[Path]:
     for secao in SECOES:
         # Endpoint conferido em 09/08/2026 (edição de 07/08: DO1 e DO3 baixaram).
         nome_zip = f"{dia_str}-{secao}.zip"
-        url = f"{BASE_URL}/index.php?p={dia_str}&dl={nome_zip}"
+        url = f"{base}/index.php?p={dia_str}&dl={nome_zip}"
         print(f"[coleta_inlabs] baixando {nome_zip} ...")
         resp = s.get(url, timeout=300)
 
