@@ -15,37 +15,43 @@ o acesso fica com o escritório.
 | # | O quê | Custo | Para quê |
 |---|---|---|---|
 | 1 | **E-mail corporativo** | já existe | Cadastro de todo o resto |
-| 2 | **GitHub** | gratuito | Onde fica o código da automação |
-| 3 | **Claude Pro** (assinatura) | ~US$ 20/mês | Roda a automação diária (Routines) |
-| 4 | **INLABS — Imprensa Nacional** | gratuito | Baixar o Diário Oficial da União |
-| 5 | **VPS Hostinger KVM2** | ~R$ 40–70/mês | Servidor do WhatsApp |
+| 2 | **[GitHub](https://github.com/signup)** | gratuito | Onde fica o código da automação |
+| 3 | **[Claude Pro](https://claude.com/pricing)** (assinatura) | ~US$ 20/mês | Roda a automação diária (Routines) |
+| 4 | **[INLABS — Imprensa Nacional](https://inlabs.in.gov.br)** | gratuito | Baixar o Diário Oficial da União |
+| 5 | **[VPS Hostinger KVM2](https://www.hostinger.com/br/servidor-vps)** | ~R$ 40–70/mês | Servidor do WhatsApp |
 | 6 | **Número de WhatsApp dedicado** | custo do chip/plano | Número que envia os alertas |
-| 7 | **Portal da Transparência — API** *(opcional)* | gratuito | CNPJ e registro de sanção das empresas |
+| 7 | **[Portal da Transparência — API](https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email)** *(opcional)* | gratuito | CNPJ e registro de sanção das empresas |
 
 **Total mensal aproximado: R$ 150 a R$ 200**, considerando a assinatura do Claude
 em dólar. Confirmar os valores no momento da contratação.
 
 ### Detalhes de cada item
 
-**2. GitHub** — cadastro gratuito. O repositório fica privado.
+**2. GitHub** — cadastro gratuito em <https://github.com/signup>. O repositório
+fica privado.
 
-**3. Claude Pro** — é o plano mínimo que libera as *Routines* (tarefas
+**3. Claude Pro** — criar a conta em <https://claude.ai> e assinar em
+<https://claude.com/pricing>. É o plano mínimo que libera as *Routines* (tarefas
 agendadas). Planos superiores (Max) só são necessários se o volume crescer — ver
 a seção de limites abaixo.
 
-**4. INLABS** — cadastro gratuito no site da Imprensa Nacional, confirmação por
-e-mail. Guardar login e senha.
+**4. INLABS** — cadastro gratuito em <https://inlabs.in.gov.br> (site da Imprensa
+Nacional), confirmação por e-mail. Guardar login e senha.
 
-**5. VPS Hostinger KVM2** — servidor onde roda o EasyPanel com a Evolution API
-(a ferramenta gratuita que envia as mensagens de WhatsApp). Eu faço toda a
-configuração; o escritório só precisa contratar o plano e me dar acesso.
+**5. VPS Hostinger KVM2** — contratar em
+<https://www.hostinger.com/br/servidor-vps> (plano **KVM 2**). É o servidor onde
+roda o [EasyPanel](https://easypanel.io) com a
+[Evolution API](https://docs.evolutionfoundation.com.br) — a ferramenta gratuita
+que envia as mensagens de WhatsApp. Eu faço toda a configuração; o escritório só
+precisa contratar o plano e me dar acesso.
 
 **6. Número de WhatsApp** — recomendo um **número separado, só da automação**,
 não o número pessoal nem o do escritório.
 
-**7. Portal da Transparência** — chave de API gratuita, pedida por e-mail. Sem
-ela a automação funciona igual; o que se perde é o CNPJ da empresa quando o
-diário não traz, e o link do cadastro de sanções.
+**7. Portal da Transparência** — chave de API gratuita, pedida em
+<https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email> (chega por
+e-mail). Sem ela a automação funciona igual; o que se perde é o CNPJ da empresa
+quando o diário não traz, e o link do cadastro de sanções.
 
 ---
 
@@ -69,7 +75,7 @@ defesa está correndo.
 - Usar uma conta Claude **dedicada à automação**, separada do uso do dia a dia.
 - Se a mesma conta for usada para outras coisas, evitar uso pesado no horário da
   rotina (manhã).
-- Acompanhar o consumo em `claude.ai/settings/usage`.
+- Acompanhar o consumo em <https://claude.ai/settings/usage>.
 - Se faltar limite com frequência, subir para o plano Max.
 
 Os números exatos de cada limite mudam com o tempo e com o plano — consultar a
@@ -133,12 +139,34 @@ manualmente.
 ## 4. Ordem sugerida
 
 1. Criar o e-mail corporativo, se ainda não houver um dedicado.
-2. Assinar o Claude Pro. *(sem isso nada roda)*
-3. Criar a conta no GitHub.
-4. Fazer o cadastro no INLABS.
-5. Contratar o VPS na Hostinger.
+2. Assinar o **Claude Pro** — <https://claude.ai> (conta) e
+   <https://claude.com/pricing> (plano). *(sem isso nada roda)*
+3. Criar a conta no **GitHub** — <https://github.com/signup>.
+4. Fazer o cadastro no **INLABS** — <https://inlabs.in.gov.br>.
+5. Contratar o **VPS na Hostinger** (KVM 2) —
+   <https://www.hostinger.com/br/servidor-vps>.
 6. Separar o número de WhatsApp.
-7. Pedir a chave do Portal da Transparência. *(opcional, pode ficar para depois)*
+7. Pedir a chave do **Portal da Transparência** —
+   <https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email>.
+   *(opcional, pode ficar para depois)*
 8. Agendar a configuração comigo.
 
 Os itens 3 a 7 podem ser feitos em paralelo. O item 2 é o único bloqueante.
+
+---
+
+## 5. Links das plataformas
+
+Todos os endereços em um só lugar, para copiar:
+
+| Plataforma | Link | Observação |
+|---|---|---|
+| Claude (conta) | <https://claude.ai> | Criar a conta com o e-mail corporativo |
+| Claude (planos) | <https://claude.com/pricing> | Assinar o **Pro** |
+| Claude (consumo) | <https://claude.ai/settings/usage> | Acompanhar o limite de uso |
+| GitHub | <https://github.com/signup> | Repositório privado do código |
+| INLABS — Imprensa Nacional | <https://inlabs.in.gov.br> | Cadastro gratuito; guardar login e senha |
+| Hostinger — VPS | <https://www.hostinger.com/br/servidor-vps> | Plano **KVM 2** |
+| Portal da Transparência — API | <https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email> | Chave gratuita, chega por e-mail *(opcional)* |
+| EasyPanel | <https://easypanel.io> | Instalado por mim no VPS |
+| Evolution API | <https://docs.evolutionfoundation.com.br> | Gratuita, instalada por mim no VPS |
