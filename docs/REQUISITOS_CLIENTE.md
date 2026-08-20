@@ -18,7 +18,7 @@ o acesso fica com o escritório.
 | 2 | **[GitHub](https://github.com/signup)** | gratuito | Onde fica o código da automação |
 | 3 | **[Claude Pro](https://claude.com/pricing)** (assinatura) | ~US$ 20/mês | Roda a automação diária (Routines) |
 | 4 | **[INLABS — Imprensa Nacional](https://inlabs.in.gov.br)** | gratuito | Baixar o Diário Oficial da União |
-| 5 | **[VPS Hostinger KVM2](https://www.hostinger.com/br/servidor-vps)** | ~R$ 40–70/mês | Servidor do WhatsApp |
+| 5 | **VPS** — [Hostinger KVM 2](https://www.hostinger.com/br/servidor-vps) **ou** [HostGator VPS](https://www.hostgator.com.br/vps) | ~R$ 22–70/mês | Servidor do WhatsApp |
 | 6 | **Número de WhatsApp dedicado** | custo do chip/plano | Número que envia os alertas |
 | 7 | **[Portal da Transparência — API](https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email)** *(opcional)* | gratuito | CNPJ e registro de sanção das empresas |
 
@@ -38,12 +38,41 @@ a seção de limites abaixo.
 **4. INLABS** — cadastro gratuito em <https://inlabs.in.gov.br> (site da Imprensa
 Nacional), confirmação por e-mail. Guardar login e senha.
 
-**5. VPS Hostinger KVM2** — contratar em
-<https://www.hostinger.com/br/servidor-vps> (plano **KVM 2**). É o servidor onde
-roda o [EasyPanel](https://easypanel.io) com a
-[Evolution API](https://docs.evolutionfoundation.com.br) — a ferramenta gratuita
+**5. Servidor VPS** — é onde roda o [EasyPanel](https://easypanel.io) com a
+[Evolution API](https://docs.evolutionfoundation.com.br), a ferramenta gratuita
 que envia as mensagens de WhatsApp. Eu faço toda a configuração; o escritório só
-precisa contratar o plano e me dar acesso.
+precisa contratar o plano e me dar acesso. **Duas opções — escolher uma:**
+
+*Opção A — Hostinger, plano KVM 2* — <https://www.hostinger.com/br/servidor-vps>.
+2 vCPU, 8 GB de RAM, 100 GB NVMe, a partir de R$ 43,99/mês (a renovação é mais
+cara que a promoção de entrada). É a configuração que eu já montei e validei nesta
+automação.
+
+*Opção B — HostGator, VPS* — <https://www.hostgator.com.br/vps>. Faz sentido se o
+escritório já é cliente da HostGator e prefere manter tudo no mesmo fornecedor.
+Funciona (as VPS da HostGator têm acesso root, Ubuntu e Docker), desde que a
+contratação atenda a **quatro condições** — confirmadas na documentação das duas
+empresas em 20/08/2026:
+
+1. Precisa ser **VPS**. Hospedagem compartilhada / plano de site com cPanel
+   **não serve** — não permite instalar Docker. Se o escritório hoje tem só
+   hospedagem de site na HostGator, a VPS é uma contratação à parte.
+2. Escolher **Ubuntu 22.04 LTS** no momento da contratação. A HostGator também
+   oferece AlmaLinux 9 e Rocky Linux 9, mas o instalador oficial do EasyPanel só
+   documenta Ubuntu.
+3. Plano com **pelo menos 2 GB de RAM** (mínimo documentado do EasyPanel). O
+   plano NVMe 2 (1 vCPU / 2 GB) fica exatamente no limite; recomendo o **NVMe 4**
+   (2 vCPU / 4 GB), mais folgado.
+4. Contratar a **VPS "limpa"**, não a variante com cPanel/WHM já instalado: o
+   EasyPanel precisa das portas 80 e 443 livres, e o cPanel as usa para os sites
+   hospedados.
+
+Preço da HostGator: a página anuncia VPS "a partir de R$ 21,69/mês", mas sem a
+tabela por plano — o valor do NVMe 4 precisa ser conferido na contratação.
+
+Em qualquer das duas o resultado é o mesmo: EasyPanel + Evolution API + o relay
+das fontes de governo. A Hostinger tem a vantagem de já estar testada ponta a
+ponta neste projeto; a HostGator, a de reaproveitar o fornecedor atual.
 
 **6. Número de WhatsApp** — recomendo um **número separado, só da automação**,
 não o número pessoal nem o do escritório.
@@ -143,8 +172,10 @@ manualmente.
    <https://claude.com/pricing> (plano). *(sem isso nada roda)*
 3. Criar a conta no **GitHub** — <https://github.com/signup>.
 4. Fazer o cadastro no **INLABS** — <https://inlabs.in.gov.br>.
-5. Contratar o **VPS na Hostinger** (KVM 2) —
-   <https://www.hostinger.com/br/servidor-vps>.
+5. Contratar o **VPS** — [Hostinger](https://www.hostinger.com/br/servidor-vps)
+   (plano KVM 2) **ou** [HostGator](https://www.hostgator.com.br/vps) (VPS com
+   Ubuntu 22.04 e 4 GB, se o escritório já é cliente). Detalhes no item 5 da
+   seção 1.
 6. Separar o número de WhatsApp.
 7. Pedir a chave do **Portal da Transparência** —
    <https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email>.
@@ -166,7 +197,8 @@ Todos os endereços em um só lugar, para copiar:
 | Claude (consumo) | <https://claude.ai/settings/usage> | Acompanhar o limite de uso |
 | GitHub | <https://github.com/signup> | Repositório privado do código |
 | INLABS — Imprensa Nacional | <https://inlabs.in.gov.br> | Cadastro gratuito; guardar login e senha |
-| Hostinger — VPS | <https://www.hostinger.com/br/servidor-vps> | Plano **KVM 2** |
+| Hostinger — VPS *(opção A)* | <https://www.hostinger.com/br/servidor-vps> | Plano **KVM 2** — já validado neste projeto |
+| HostGator — VPS *(opção B)* | <https://www.hostgator.com.br/vps> | VPS com **Ubuntu 22.04** e 4 GB; não serve hospedagem compartilhada |
 | Portal da Transparência — API | <https://portaldatransparencia.gov.br/api-de-dados/cadastrar-email> | Chave gratuita, chega por e-mail *(opcional)* |
 | EasyPanel | <https://easypanel.io> | Instalado por mim no VPS |
 | Evolution API | <https://docs.evolutionfoundation.com.br> | Gratuita, instalada por mim no VPS |

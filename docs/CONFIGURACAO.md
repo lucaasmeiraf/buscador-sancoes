@@ -13,7 +13,7 @@ variáveis de ambiente, teste local e agendamento no Claude (Routines).
 | Item | Para quê | Onde obter |
 |---|---|---|
 | Conta no INLABS | Baixar o DOU em XML | Cadastro gratuito em <https://inlabs.in.gov.br> |
-| Servidor Evolution API | Enviar WhatsApp | Servidor próprio em nuvem (VPS, ex.: <https://www.hostinger.com/br/servidor-vps>) com [EasyPanel](https://easypanel.io) e [Evolution API v2](https://docs.evolutionfoundation.com.br) instalados |
+| Servidor Evolution API | Enviar WhatsApp | VPS próprio com root e Ubuntu — [Hostinger KVM 2](https://www.hostinger.com/br/servidor-vps) (validado) ou [HostGator VPS](https://www.hostgator.com.br/vps) (Ubuntu 22.04, ≥ 2 GB, sem cPanel) — com [EasyPanel](https://easypanel.io) e [Evolution API v2](https://docs.evolutionfoundation.com.br) instalados |
 | Repositório no GitHub | O Routines clona o repo a cada execução | Este repositório publicado no GitHub (conta em <https://github.com/signup>) |
 | Python 3.11+ | Rodar os scripts (só para teste local) | <https://www.python.org/downloads/> |
 | Assinatura Claude Pro (ou superior) | Agendar a rotina no Routines | <https://claude.com/pricing> |
